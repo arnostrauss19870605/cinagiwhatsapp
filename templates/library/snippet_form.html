@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Quick reply{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <h1 class="text-2xl font-semibold">{% if snippet %}Edit quick reply{% else %}New quick reply{% endif %}</h1>
+  <form method="post" class="mt-6 space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
+    {% csrf_token %}
+    {% for field in form %}
+      <div>
+        <label class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+        <div class="mt-1">{{ field }}</div>
+        {% if field.help_text %}<p class="mt-1 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <div class="flex gap-2">
+      <button class="rounded-lg accent px-4 py-2 text-sm font-medium text-white">Save</button>
+      <a href="{% url 'library:snippets' %}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</a>
+    </div>
+  </form>
+</div>
+<style>form input[type=text],form textarea,form select{width:100%;border:1px solid #cbd5e1;border-radius:.5rem;padding:.5rem .75rem}</style>
+{% endblock %}

@@ -1,0 +1,66 @@
+<header class="sticky top-0 z-30 border-b border-slate-200 bg-white">
+  <div class="mx-auto flex max-w-full items-center gap-3 px-4 py-2">
+
+    <a href="{% url 'core:dashboard' %}" class="flex items-center gap-2 font-semibold text-slate-900">
+      <span class="flex h-8 w-8 items-center justify-center rounded-lg accent text-white text-sm">C</span>
+      <span class="hidden sm:inline">{{ SITE_NAME }}</span>
+    </a>
+
+    {% if workspace %}
+      <div class="relative" x-data="{open:false}" @click.outside="open=false">
+        <button @click="open=!open"
+                class="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
+          <span class="h-2.5 w-2.5 rounded-full accent"></span>
+          <span class="font-medium">{{ workspace.name }}</span>
+          <svg class="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div x-show="open" x-cloak
+             class="absolute left-0 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+          <p class="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Switch number</p>
+          {% for ws in available_workspaces %}
+            <a href="{% url 'workspaces:switch' ws.slug %}"
+               class="flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-slate-50 {% if ws.id == workspace.id %}bg-slate-50 font-medium{% endif %}">
+              <span class="flex items-center gap-2">
+                <span class="h-2.5 w-2.5 rounded-full" style="background-color: {{ ws.accent_colour }}"></span>
+                {{ ws.name }}
+              </span>
+              {% if ws.id == workspace.id %}<span class="text-xs text-slate-400">current</span>{% endif %}
+            </a>
+          {% endfor %}
+          <div class="mt-1 border-t border-slate-100 pt-1">
+            <a href="{% url 'workspaces:create' %}" class="block rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">+ Add another number</a>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    <nav class="ml-2 hidden items-center gap-1 text-sm md:flex">
+      <a href="{% url 'inbox:inbox' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Chats</a>
+      <a href="{% url 'library:snippets' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Quick replies</a>
+      <a href="{% url 'library:templates' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Templates</a>
+      {% if membership.can_manage %}
+        <a href="{% url 'channels_wa:list' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Numbers</a>
+        <a href="{% url 'workspaces:hours' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Hours</a>
+        <a href="{% url 'workspaces:team' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Team</a>
+      {% endif %}
+    </nav>
+
+    <div class="ml-auto flex items-center gap-2">
+      <div class="relative" x-data="{open:false}" @click.outside="open=false">
+        <button @click="open=!open" class="flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
+          <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold">{{ user.initials }}</span>
+          <span class="hidden sm:inline">{{ user.display_name }}</span>
+        </button>
+        <div x-show="open" x-cloak class="absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+          <a href="{% url 'agents:me' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">My availability</a>
+          {% if membership.can_supervise %}<a href="{% url 'agents:team' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">Who is available</a>{% endif %}
+          {% if membership.can_manage %}<a href="{% url 'workspaces:settings' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">Workspace settings</a>{% endif %}
+          <a href="{% url 'accounts:password_change' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">Change password</a>
+          <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}
+            <button class="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50">Sign out</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>

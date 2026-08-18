@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}New workspace{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <p class="text-sm font-medium accent-text">Step 1 of 2</p>
+  <h1 class="mt-1 text-2xl font-semibold">Set up a workspace</h1>
+  <p class="mt-2 text-slate-600">
+    A workspace holds one WhatsApp number and everything that goes with it - the chats, your team,
+    your saved replies and your working hours. If you have two numbers, you will have two workspaces.
+  </p>
+  <form method="post" class="mt-6 space-y-5 rounded-2xl border border-slate-200 bg-white p-6">
+    {% csrf_token %}
+    {% for field in form %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+        <div class="mt-1">{{ field }}</div>
+        {% if field.help_text %}<p class="mt-1 text-xs text-slate-500">{{ field.help_text }}</p>{% endif %}
+        {% for error in field.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <div class="flex gap-2">
+      <button class="rounded-lg accent px-4 py-2 text-sm font-medium text-white">Continue</button>
+      <a href="{% url 'workspaces:list' %}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm">Cancel</a>
+    </div>
+  </form>
+</div>
+<style>
+  form input[type=text], form input[type=email], form select, form textarea {
+    width:100%; border:1px solid #cbd5e1; border-radius:.5rem; padding:.5rem .75rem;
+  }
+  form input[type=color]{height:2.5rem;width:4rem;padding:0;border:1px solid #cbd5e1;border-radius:.5rem}
+</style>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Chats{% endblock %}
+{% block main_class %}h-[calc(100vh-3.25rem)]{% endblock %}
+{% block content %}
+<div class="flex h-full" x-data="{pane: '{% if conversation %}thread{% else %}list{% endif %}', showInfo: false}">
+
+  <!-- LEFT: conversation list -->
+  <aside class="w-full shrink-0 border-r border-slate-200 bg-white md:block md:w-80 lg:w-96"
+         :class="pane === 'thread' ? 'hidden md:block' : ''">
+    <div class="border-b border-slate-200 p-3">
+      <form method="get" action="{% url 'inbox:inbox' %}" class="flex gap-2">
+        <input type="hidden" name="view" value="{{ view }}">
+        <input type="search" name="q" value="{{ query }}" placeholder="Search name, number or message"
+               class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+      </form>
+      <div class="mt-2 flex gap-1 text-xs">
+        {% for key, label in filters.items %}
+          <a href="{% url 'inbox:inbox' %}?view={{ key }}"
+             class="rounded-full px-3 py-1 {% if view == key %}accent text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">
+            {{ label }}{% if key == 'unassigned' and counts.unassigned %} ({{ counts.unassigned }}){% elif key == 'mine' and counts.mine %} ({{ counts.mine }}){% endif %}
+          </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div id="conversation-list" class="h-[calc(100%-6.5rem)] overflow-y-auto"
+         hx-get="{% url 'inbox:inbox' %}?fragment=list&view={{ view }}&q={{ query }}"
+         hx-trigger="every 8s, refresh-list from:body"
+         hx-swap="innerHTML">
+      {% include "inbox/partials/conversation_list.html" %}
+    </div>
+  </aside>
+
+  <!-- MIDDLE: the conversation -->
+  <section class="flex min-w-0 flex-1 flex-col bg-slate-50" :class="pane === 'list' ? 'hidden md:flex' : 'flex'">
+    {% if conversation %}
+      <div id="thread" hx-get="{% url 'inbox:thread' conversation.pk %}"
+           hx-trigger="refresh-thread from:body" hx-swap="innerHTML" class="flex h-full flex-col">
+        {% include "inbox/partials/thread.html" %}
+      </div>
+    {% else %}
+      <div class="flex h-full flex-col items-center justify-center p-10 text-center">
+        <div class="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-10">
+          <p class="text-lg font-medium text-slate-900">Pick a chat on the left</p>
+          <p class="mt-1 max-w-sm text-sm text-slate-500">
+            New WhatsApp messages land here automatically. Nothing yet? Send a message to your
+            number from your own phone to try it out.
+          </p>
+        </div>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+  // Realtime: the server only tells us "something changed" - we refetch the
+  // fragments. If the socket is unavailable the 8 second poll above covers us.
+  (function () {
+    {% if workspace %}
+    var proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    var url = proto + '://' + window.location.host + '/ws/inbox/{{ workspace.id }}/';
+    var socket;
+    function connect() {
+      try { socket = new WebSocket(url); } catch (e) { return; }
+      socket.onmessage = function () {
+        document.body.dispatchEvent(new Event('refresh-list'));
+        document.body.dispatchEvent(new Event('refresh-thread'));
+      };
+      socket.onclose = function () { setTimeout(connect, 5000); };
+    }
+    connect();
+    {% endif %}
+  })();
+</script>
+{% endblock %}

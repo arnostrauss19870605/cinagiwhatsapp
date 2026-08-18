@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold text-slate-900">{{ workspace.name }}</h1>
+    <p class="text-sm text-slate-500">{{ workspace.description|default:"Your WhatsApp workspace" }}</p>
+  </div>
+  <a href="{% url 'inbox:inbox' %}" class="rounded-lg accent px-4 py-2 text-sm font-medium text-white">Open chats</a>
+</div>
+
+<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <a href="{% url 'inbox:inbox' %}?view=unassigned" class="rounded-2xl border border-slate-200 bg-white p-5 hover:border-slate-300">
+    <p class="text-sm text-slate-500">Waiting for someone</p>
+    <p class="mt-1 text-3xl font-semibold {% if counts.queued %}text-amber-600{% else %}text-slate-900{% endif %}">{{ counts.queued }}</p>
+  </a>
+  <a href="{% url 'inbox:inbox' %}?view=mine" class="rounded-2xl border border-slate-200 bg-white p-5 hover:border-slate-300">
+    <p class="text-sm text-slate-500">With you</p>
+    <p class="mt-1 text-3xl font-semibold text-slate-900">{{ counts.assigned_to_me }}</p>
+  </a>
+  <a href="{% url 'inbox:inbox' %}?view=open" class="rounded-2xl border border-slate-200 bg-white p-5 hover:border-slate-300">
+    <p class="text-sm text-slate-500">Open chats</p>
+    <p class="mt-1 text-3xl font-semibold text-slate-900">{{ counts.open }}</p>
+  </a>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5">
+    <p class="text-sm text-slate-500">Right now</p>
+    <p class="mt-1 text-lg font-semibold {% if workspace.is_open %}text-emerald-600{% else %}text-slate-500{% endif %}">
+      {% if workspace.is_open %}Open{% else %}Closed{% endif %}
+    </p>
+    <a href="{% url 'workspaces:hours' %}" class="text-xs text-slate-500 underline">Working hours</a>
+  </div>
+</div>
+
+<h2 class="mt-10 text-sm font-semibold uppercase tracking-wide text-slate-500">Your numbers</h2>
+<div class="mt-3 grid gap-4 md:grid-cols-2">
+  {% for channel in channels %}
+    {% with health=channel.health %}
+    <div class="rounded-2xl border border-slate-200 bg-white p-5">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="font-medium text-slate-900">{{ channel.display_name }}</p>
+          <p class="text-sm text-slate-500">{{ channel.phone_number|default:"Number not set" }}</p>
+        </div>
+        <span class="rounded-full px-3 py-1 text-xs font-medium
+          {% if health.0 == 'ok' %}bg-emerald-100 text-emerald-800
+          {% elif health.0 == 'warning' %}bg-amber-100 text-amber-800
+          {% elif health.0 == 'error' %}bg-rose-100 text-rose-800
+          {% else %}bg-slate-100 text-slate-600{% endif %}">
+          {% if health.0 == 'ok' %}Healthy{% elif health.0 == 'warning' %}Needs care{% elif health.0 == 'error' %}Problem{% elif health.0 == 'paused' %}Switched off{% else %}Not finished{% endif %}
+        </span>
+      </div>
+      <p class="mt-3 text-sm text-slate-600">{{ health.1 }}</p>
+      {% if channel.messaging_limit %}<p class="mt-1 text-xs text-slate-400">Daily limit tier: {{ channel.messaging_limit }}</p>{% endif %}
+      {% if membership.can_manage %}
+        <div class="mt-4 flex gap-2 text-sm">
+          <a href="{% url 'channels_wa:verify' channel.pk %}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Check connection</a>
+          <a href="{% url 'channels_wa:edit' channel.pk %}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Settings</a>
+        </div>
+      {% endif %}
+    </div>
+    {% endwith %}
+  {% empty %}
+    <div class="rounded-2xl border-2 border-dashed border-slate-300 bg-white p-8 text-center md:col-span-2">
+      <p class="font-medium text-slate-900">No WhatsApp number connected yet</p>
+      <p class="mx-auto mt-1 max-w-md text-sm text-slate-500">
+        Once your number is set up in Meta's WhatsApp Manager, connect it here. It takes about two minutes
+        and we will send a test message to check it works.
+      </p>
+      <a href="{% url 'channels_wa:connect' %}" class="mt-4 inline-block rounded-lg accent px-4 py-2 text-sm font-medium text-white">Connect a number</a>
+    </div>
+  {% endfor %}
+</div>
+
+{% if recent %}
+<h2 class="mt-10 text-sm font-semibold uppercase tracking-wide text-slate-500">Latest chats</h2>
+<div class="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  {% for conversation in recent %}
+    <a href="{% url 'inbox:conversation' conversation.pk %}" class="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
+      <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold">{{ conversation.contact.initials }}</span>
+      <span class="min-w-0 flex-1">
+        <span class="block truncate font-medium text-slate-900">{{ conversation.contact.name }}</span>
+        <span class="block text-xs text-slate-500">{{ conversation.get_status_display }}</span>
+      </span>
+      <span class="text-xs text-slate-400">{{ conversation.last_activity_at|timesince }} ago</span>
+    </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

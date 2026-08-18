@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Approved templates{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between">
+  <div>
+    <h1 class="text-2xl font-semibold">Approved templates</h1>
+    <p class="max-w-2xl text-sm text-slate-500">
+      These come from WhatsApp Manager - you write and submit them there, and Meta approves them.
+      You need one of these to message a customer who has not written to you in the last 24 hours.
+    </p>
+  </div>
+  {% if membership.can_manage %}
+    <div class="flex gap-2">
+      {% for channel in channels %}
+        <a href="{% url 'channels_wa:sync_templates' channel.pk %}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">
+          Refresh from WhatsApp
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+      <tr><th class="px-5 py-3">Name</th><th class="px-5 py-3">Language</th><th class="px-5 py-3">Type</th>
+          <th class="px-5 py-3">Status</th><th class="px-5 py-3">Message</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for t in templates %}
+        <tr>
+          <td class="px-5 py-3 font-medium">{{ t.name }}</td>
+          <td class="px-5 py-3">{{ t.language }}</td>
+          <td class="px-5 py-3">{{ t.get_category_display }}</td>
+          <td class="px-5 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs
+              {% if t.status == 'APPROVED' %}bg-emerald-100 text-emerald-800
+              {% elif t.status == 'REJECTED' %}bg-rose-100 text-rose-800
+              {% else %}bg-slate-100 text-slate-600{% endif %}">{{ t.get_status_display }}</span>
+          </td>
+          <td class="px-5 py-3 text-slate-600">{{ t.body_text|truncatechars:80 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="px-5 py-10 text-center text-slate-500">
+          <p class="font-medium text-slate-700">No templates loaded yet</p>
+          <p class="mt-1 text-sm">Once your number is connected, press Refresh from WhatsApp to pull in everything Meta has approved.</p>
+        </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

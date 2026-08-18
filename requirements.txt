@@ -1,0 +1,15 @@
+# Cinagi WhatsApp Platform - runtime dependencies
+Django==6.0.*
+psycopg[binary]==3.2.*
+celery==5.5.*
+redis==5.2.*
+django-celery-beat==2.9.*
+channels[daphne]==4.2.*
+channels-redis==4.2.*
+cryptography==44.*
+requests==2.32.*
+python-dotenv==1.0.*
+whitenoise==6.8.*
+gunicorn==23.0.*
+uvicorn[standard]==0.34.*
+Pillow==11.*

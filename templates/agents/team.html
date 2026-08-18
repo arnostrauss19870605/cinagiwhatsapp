@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Who is available{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold">Who is available</h1>
+<div class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+      <tr><th class="px-5 py-3">Agent</th><th class="px-5 py-3">Status</th><th class="px-5 py-3">Open chats</th>
+          <th class="px-5 py-3">Limit</th><th class="px-5 py-3">Auto-assign</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in profiles %}
+        <tr>
+          <td class="px-5 py-3 font-medium">{{ p.user.display_name }}</td>
+          <td class="px-5 py-3">
+            <span class="rounded-full px-2 py-0.5 text-xs {% if p.presence == 'online' %}bg-emerald-100 text-emerald-800{% else %}bg-slate-100 text-slate-600{% endif %}">
+              {{ p.get_presence_display }}
+            </span>
+          </td>
+          <td class="px-5 py-3">{{ p.open_count }}</td>
+          <td class="px-5 py-3">{{ p.max_concurrent }}</td>
+          <td class="px-5 py-3">{% if p.accepts_auto_assignment %}Yes{% else %}No{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="px-5 py-8 text-center text-slate-500">Nobody has set their availability yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

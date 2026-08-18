@@ -1,0 +1,13 @@
+{
+  "name": "cinagi-whatsapp",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build:css": "tailwindcss -i ./theme/static_src/input.css -o ./static/css/app.css --minify",
+    "watch:css": "tailwindcss -i ./theme/static_src/input.css -o ./static/css/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.0.0",
+    "tailwindcss": "^4.0.0"
+  }
+}

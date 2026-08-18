@@ -1,0 +1,58 @@
+{% load static copy_tags %}<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
+  {% if TAILWIND_CDN %}
+    <script src="https://cdn.tailwindcss.com"></script>
+  {% else %}
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% endif %}
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+  <style>
+    [x-cloak]{display:none!important}
+    .accent{background-color:{{ workspace.accent_colour|default:"#0f766e" }}}
+    .accent-text{color:{{ workspace.accent_colour|default:"#0f766e" }}}
+    .accent-border{border-color:{{ workspace.accent_colour|default:"#0f766e" }}}
+  </style>
+</head>
+<body class="h-full bg-slate-100 text-slate-800 antialiased">
+<script>
+  // HTMX posts need the CSRF token; attach it once, globally.
+  document.body.addEventListener('htmx:configRequest', function (event) {
+    event.detail.headers['X-CSRFToken'] =
+      document.querySelector('meta[name=csrf-token]').getAttribute('content');
+  });
+
+  // Drop a saved reply into the message box.
+  function insertSnippet(button) {
+    var form = document.querySelector('form[data-composer]');
+    if (!form) { return; }
+    var box = form.querySelector('textarea[name=body]');
+    var hidden = form.querySelector('input[name=snippet_id]');
+    if (box) { box.value = button.dataset.body; box.focus(); }
+    if (hidden) { hidden.value = button.dataset.id; }
+    document.body.dispatchEvent(new CustomEvent('snippet-chosen'));
+  }
+</script>
+
+{% if user.is_authenticated %}{% include "partials/nav.html" %}{% endif %}
+
+{% if OUTBOUND_BANNER.0 %}
+  <div class="w-full px-4 py-2 text-center text-sm font-medium
+              {% if OUTBOUND_BANNER.1 == 'warning' %}bg-amber-100 text-amber-900{% else %}bg-sky-100 text-sky-900{% endif %}">
+    {{ OUTBOUND_BANNER.0 }}
+  </div>
+{% endif %}
+
+<main class="{% block main_class %}mx-auto max-w-6xl px-4 py-8{% endblock %}">
+  {% include "partials/messages.html" %}
+  {% block content %}{% endblock %}
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

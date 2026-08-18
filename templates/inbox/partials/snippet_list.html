@@ -1,0 +1,14 @@
+{% for snippet in snippets %}
+  <button type="button"
+          data-body="{{ snippet.body }}" data-id="{{ snippet.pk }}"
+          onclick="insertSnippet(this)"
+          class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50">
+    <span class="font-medium text-slate-800">{{ snippet.title }}</span>
+    {% if snippet.shortcut %}<span class="ml-1 text-xs text-slate-400">/{{ snippet.shortcut }}</span>{% endif %}
+    <span class="mt-0.5 block truncate text-xs text-slate-500">{{ snippet.body|truncatechars:70 }}</span>
+  </button>
+{% empty %}
+  <p class="px-3 py-2 text-sm text-slate-500">
+    No saved replies yet. <a href="{% url 'library:snippet_create' %}" class="underline">Create one</a>.
+  </p>
+{% endfor %}

@@ -1,0 +1,91 @@
+# Development stack.  Start everything with:  docker compose up
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-cinagi_wa}
+      POSTGRES_USER: ${DB_USER:-cinagi}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cinagi}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cinagi}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: .
+    image: cinagi-wa:latest
+    # Keep every continuation line at this exact indentation. In a YAML folded
+    # scalar a more-indented line keeps its newline, which would split the
+    # gunicorn arguments into a separate command and start gunicorn with none.
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+      python manage.py collectstatic --noinput &&
+      gunicorn config.asgi:application
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000 --workers 3 --timeout 60 --reload"
+    env_file: .env
+    volumes:
+      - .:/app
+      - media_files:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  # Inbound webhooks get their own worker so a slow job never delays a customer message.
+  worker-webhooks:
+    build: .
+    image: cinagi-wa:latest
+    command: celery -A config worker -Q webhooks -l info --concurrency 4
+    env_file: .env
+    volumes:
+      - .:/app
+      - media_files:/app/media
+    depends_on:
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+
+  worker:
+    build: .
+    image: cinagi-wa:latest
+    command: celery -A config worker -Q default,outbound,ai -l info --concurrency 2
+    env_file: .env
+    volumes:
+      - .:/app
+      - media_files:/app/media
+    depends_on:
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+
+  beat:
+    build: .
+    image: cinagi-wa:latest
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file: .env
+    volumes:
+      - .:/app
+    depends_on:
+      redis: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+
+volumes:
+  pg_data:
+  redis_data:
+  media_files:

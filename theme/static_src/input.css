@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+/* Scan the templates and any Python that carries class names. */
+@source "../../templates";
+@source "../../apps";

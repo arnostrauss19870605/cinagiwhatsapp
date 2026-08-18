@@ -1,0 +1,36 @@
+{% for c in conversations %}
+  <a href="{% url 'inbox:conversation' c.pk %}"
+     class="flex gap-3 border-b border-slate-100 px-4 py-3 hover:bg-slate-50
+            {% if conversation and c.pk == conversation.pk %}bg-slate-100{% endif %}">
+    <span class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+      {{ c.contact.initials }}
+    </span>
+    <span class="min-w-0 flex-1">
+      <span class="flex items-baseline justify-between gap-2">
+        <span class="truncate font-medium text-slate-900">{{ c.contact.name }}</span>
+        <span class="shrink-0 text-[11px] text-slate-400">{{ c.last_activity_at|timesince|truncatewords:1 }}</span>
+      </span>
+      <span class="mt-0.5 flex items-center gap-2">
+        <span class="truncate text-sm text-slate-500">
+          {% with last=c.messages.last %}{{ last.body|default:"(attachment)"|truncatechars:44 }}{% endwith %}
+        </span>
+        {% if c.unread_agent_count %}
+          <span class="ml-auto shrink-0 rounded-full bg-emerald-500 px-1.5 text-[11px] font-semibold text-white">{{ c.unread_agent_count }}</span>
+        {% endif %}
+      </span>
+      <span class="mt-1 flex items-center gap-1 text-[11px]">
+        {% if c.assigned_to %}
+          <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{{ c.assigned_to.display_name }}</span>
+        {% else %}
+          <span class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Waiting for someone</span>
+        {% endif %}
+        {% if not c.window_open %}<span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">Template only</span>{% endif %}
+      </span>
+    </span>
+  </a>
+{% empty %}
+  <div class="p-8 text-center text-sm text-slate-500">
+    <p class="font-medium text-slate-700">Nothing here</p>
+    <p class="mt-1">When a customer messages your number, their chat appears in this list.</p>
+  </div>
+{% endfor %}

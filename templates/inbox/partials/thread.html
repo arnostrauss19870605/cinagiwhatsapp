@@ -1,0 +1,131 @@
+<!-- header -->
+<div class="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
+  <a href="{% url 'inbox:inbox' %}" class="md:hidden rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">&larr;</a>
+  <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold">{{ conversation.contact.initials }}</span>
+  <div class="min-w-0 flex-1">
+    <p class="truncate font-medium text-slate-900">{{ conversation.contact.name }}</p>
+    <p class="text-xs text-slate-500">{{ conversation.contact.pretty_number }} &middot; {{ conversation.get_status_display }}</p>
+  </div>
+  <div class="flex items-center gap-2 text-sm">
+    {% if conversation.assigned_to_id == user.id %}
+      <a href="{% url 'inbox:release' conversation.pk %}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Hand back</a>
+    {% elif not conversation.assigned_to_id %}
+      <a href="{% url 'inbox:claim' conversation.pk %}" class="rounded-lg accent px-3 py-1.5 text-white">Take this chat</a>
+    {% else %}
+      <span class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs text-slate-600">With {{ conversation.assigned_to.display_name }}</span>
+    {% endif %}
+    {% if conversation.status == 'resolved' or conversation.status == 'closed' %}
+      <a href="{% url 'inbox:reopen' conversation.pk %}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Reopen</a>
+    {% else %}
+      <a href="{% url 'inbox:resolve' conversation.pk %}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Mark resolved</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- messages -->
+<div class="flex-1 space-y-2 overflow-y-auto px-4 py-4" id="messages">
+  {% for message in conversation.messages.all %}
+    {% if message.payload.note %}
+      <div class="mx-auto max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+        <span class="text-xs font-semibold uppercase tracking-wide">Internal note</span>
+        <p class="mt-1 whitespace-pre-wrap">{{ message.body }}</p>
+        <p class="mt-1 text-[11px] opacity-70">{{ message.author.display_name }} &middot; {{ message.created_at|date:"j M H:i" }}</p>
+      </div>
+    {% else %}
+      <div class="flex {% if message.is_inbound %}justify-start{% else %}justify-end{% endif %}">
+        <div class="max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm
+                    {% if message.is_inbound %}rounded-tl-sm bg-white text-slate-800{% else %}rounded-tr-sm bg-emerald-100 text-slate-900{% endif %}">
+          {% if message.media %}
+            <a href="{% url 'inbox:media' message.pk %}" class="mb-1 block underline">
+              {% if message.kind == 'image' %}
+                <img src="{% url 'inbox:media' message.pk %}" alt="" class="max-h-64 rounded-lg">
+              {% else %}
+                {{ message.media_filename|default:"Attachment" }}
+              {% endif %}
+            </a>
+          {% endif %}
+          {% if message.body %}<p class="whitespace-pre-wrap">{{ message.body }}</p>{% endif %}
+          <p class="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
+            {% if message.actor == 'bot' %}<span class="rounded bg-slate-200 px-1">auto</span>{% endif %}
+            {% if message.kind == 'template' %}<span class="rounded bg-slate-200 px-1">template</span>{% endif %}
+            {{ message.created_at|date:"H:i" }}
+            {% if not message.is_inbound %}
+              {% if message.wa_status == 'read' %}<span class="text-sky-600">&check;&check;</span>
+              {% elif message.wa_status == 'delivered' %}<span>&check;&check;</span>
+              {% elif message.wa_status == 'sent' %}<span>&check;</span>
+              {% elif message.wa_status == 'failed' %}<span class="text-rose-600" title="{{ message.wa_error.reason }}">not delivered</span>
+              {% elif message.wa_status == 'blocked' %}<span class="text-amber-600">not sent (test mode)</span>
+              {% else %}<span>&middot;</span>{% endif %}
+            {% endif %}
+          </p>
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<!-- composer -->
+<div class="border-t border-slate-200 bg-white p-3">
+  <p class="mb-2 text-xs {% if conversation.window_open %}text-slate-500{% else %}text-amber-700{% endif %}">
+    {{ conversation.window_hint }}
+  </p>
+
+  {% if conversation.window_open %}
+    <div x-data="{q:'', showSnippets:false}">
+      <form method="post" action="{% url 'inbox:send' conversation.pk %}" enctype="multipart/form-data"
+            data-composer class="flex items-end gap-2"
+            @snippet-chosen.window="showSnippets = false">
+        {% csrf_token %}
+        <input type="hidden" name="snippet_id" x-ref="snippetId">
+        <label class="cursor-pointer rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">
+          <input type="file" name="attachment" class="hidden">
+          Attach
+        </label>
+        <div class="relative flex-1">
+          <textarea name="body" rows="1" x-ref="composer"
+                    @keydown="if ($event.key === '/' && $refs.composer.value === '') { showSnippets = true }"
+                    @keydown.escape="showSnippets = false"
+                    class="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    placeholder="Type a message.  Press / for a saved reply."></textarea>
+
+          <div x-show="showSnippets" x-cloak
+               class="absolute bottom-12 left-0 z-20 w-full rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+            <input type="text" x-model="q" placeholder="Search saved replies"
+                   hx-get="{% url 'inbox:snippet_search' %}" hx-trigger="keyup changed delay:200ms"
+                   hx-target="#snippet-results" name="q"
+                   class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <div id="snippet-results" class="mt-2 max-h-56 overflow-y-auto">
+              {% include "inbox/partials/snippet_list.html" %}
+            </div>
+          </div>
+        </div>
+        <button class="rounded-lg accent px-4 py-2 text-sm font-medium text-white">Send</button>
+      </form>
+    </div>
+  {% else %}
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-3">
+      <p class="text-sm text-amber-900">Choose an approved template to reach this customer again.</p>
+      <form method="get" action="{% url 'inbox:send_template' conversation.pk %}" class="mt-2 flex gap-2">
+        <select name="template_id" class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          {% for t in templates %}<option value="{{ t.pk }}">{{ t.name }} ({{ t.language }})</option>{% endfor %}
+        </select>
+        <button class="rounded-lg accent px-4 py-2 text-sm text-white">Continue</button>
+      </form>
+      {% if not templates %}
+        <p class="mt-2 text-xs text-amber-800">
+          No approved templates loaded yet. An administrator can load them from Numbers &rarr; Load templates.
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <details class="mt-2">
+    <summary class="cursor-pointer text-xs text-slate-500">Add an internal note (the customer never sees this)</summary>
+    <form method="post" action="{% url 'inbox:add_note' conversation.pk %}" class="mt-2 flex gap-2">
+      {% csrf_token %}
+      <textarea name="body" rows="1" class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Note for your team"></textarea>
+      <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">Save note</button>
+    </form>
+  </details>
+</div>

@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+node_modules/
+static/css/app.css
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# transfer archives and anything staged for deletion
+_to_delete/
+*.tar.gz
+*.zip

@@ -1,0 +1,85 @@
+# Production stack for a Linux host.  Usage:
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 10s, retries: 10}
+    restart: unless-stopped
+
+  web:
+    build: .
+    image: cinagi-wa:latest
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+      python manage.py collectstatic --noinput &&
+      gunicorn config.asgi:application
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+    env_file: .env
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  worker-webhooks:
+    build: .
+    image: cinagi-wa:latest
+    command: celery -A config worker -Q webhooks -l info --concurrency 6
+    env_file: .env
+    volumes: [media_files:/app/media]
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+
+  worker:
+    build: .
+    image: cinagi-wa:latest
+    command: celery -A config worker -Q default,outbound,ai -l info --concurrency 4
+    env_file: .env
+    volumes: [media_files:/app/media]
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+
+  beat:
+    build: .
+    image: cinagi-wa:latest
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    env_file: .env
+    depends_on: [redis, postgres]
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_files:/var/www/static:ro
+      - media_files:/var/www/media:ro
+    ports:
+      - "127.0.0.1:8080:80"   # host nginx terminates TLS on 80/443 and proxies here
+    depends_on: [web]
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
+  static_files:
+  media_files:
