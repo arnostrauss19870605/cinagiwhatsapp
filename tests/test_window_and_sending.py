@@ -89,6 +89,21 @@ class SendingTests(TestCase):
         with override_settings(OUTBOUND_COMMS_MODE="live"):
             self.assertIsNone(outbound_blocked("27820000001"))
 
+    def test_allowlist_accepts_the_same_number_written_differently(self):
+        """0726124698, 27726124698 and +27 72 612 4698 are one phone."""
+        for stored in ["0726124698", "27726124698", "+27 72 612 4698"]:
+            with override_settings(OUTBOUND_COMMS_MODE="allowlist", OUTBOUND_ALLOWLIST=[stored]):
+                for dialled in ["0726124698", "27726124698", "+27726124698"]:
+                    self.assertIsNone(
+                        outbound_blocked(dialled),
+                        f"stored {stored} should have matched {dialled}",
+                    )
+
+    def test_allowlist_still_blocks_a_different_number(self):
+        with override_settings(OUTBOUND_COMMS_MODE="allowlist", OUTBOUND_ALLOWLIST=["27726124698"]):
+            self.assertIsNotNone(outbound_blocked("27831234567"))
+            self.assertIsNotNone(outbound_blocked(""))
+
 
 class MessageStatusTests(TestCase):
     def setUp(self):
