@@ -1,0 +1,36 @@
+# Line endings.
+#
+# The working copy lives on Windows and the server runs Linux. Without these
+# rules a Windows checkout can commit CRLF into a file the server has to
+# execute, and the server fails with "bad interpreter: /usr/bin/env bash^M" -
+# an error that tells you nothing about the real cause.
+#
+# Everything is stored and checked out as LF. Windows editors handle LF fine.
+
+* text=auto eol=lf
+
+# Files the server executes or parses - LF is not optional
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.conf      text eol=lf
+*.py        text eol=lf
+*.env       text eol=lf
+
+# PowerShell only ever runs on Windows
+*.ps1       text eol=crlf
+
+# Never rewrite bytes in these - line-ending conversion corrupts them
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.pdf    binary
+*.webp   binary
+*.woff   binary
+*.woff2  binary
+*.zip    binary
+*.gz     binary
+*.sqlite3 binary
