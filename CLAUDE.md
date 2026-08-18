@@ -62,6 +62,14 @@ apps/agents/     AgentProfile, teams, skills, the allocation algorithm
 apps/library/    approved templates (synced, read-only) and quick replies (ours)
 ```
 
+## File modes
+
+Windows has no execute bit and this repo carries `core.filemode=false`, so a shell script that
+arrives on a Windows working copy lands in git as `100644` and the Linux server cannot run it. The
+push script sets the bit in the **index** (`git update-index --chmod=+x`) for every tracked `*.sh`
+before pushing, because that is what actually reaches the server. If you add a shell script, either
+run that or expect the server to hit "permission denied".
+
 ## Conventions
 
 - Function-based views. HTMX partials under `templates/<app>/partials/`.
