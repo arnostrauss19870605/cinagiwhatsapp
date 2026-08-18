@@ -164,3 +164,36 @@ class SnippetTests(TestCase):
             workspace=workspace, title="Greeting", body="Hi {{contact.first_name}}, how can we help?"
         )
         self.assertEqual(snippet.render(contact=contact), "Hi Thandi, how can we help?")
+
+
+class FailureExplanationTests(TestCase):
+    """A failed send must say why in words the operator can act on."""
+
+    def _message(self, wa_error):
+        workspace = Workspace.objects.create(name="Alpha")
+        channel = WhatsAppChannel.objects.create(
+            workspace=workspace, display_name="S", phone_number_id="1"
+        )
+        contact = Contact.objects.create(workspace=workspace, wa_id="27726124698")
+        conversation = Conversation.objects.create(
+            workspace=workspace, channel=channel, contact=contact
+        )
+        return Message.objects.create(
+            workspace=workspace,
+            conversation=conversation,
+            direction=Message.Direction.OUT,
+            wa_status=Message.Status.FAILED,
+            wa_error=wa_error,
+        )
+
+    def test_undeliverable_number_is_explained(self):
+        message = self._message({"errors": [{"code": 131026, "title": "Message undeliverable"}]})
+        self.assertIn("cannot receive WhatsApp messages", message.failure_explanation)
+        self.assertIn("Message undeliverable", message.failure_explanation)
+
+    def test_closed_window_is_explained(self):
+        message = self._message({"errors": [{"code": 131047}]})
+        self.assertIn("24 hours", message.failure_explanation)
+
+    def test_unknown_error_still_says_something(self):
+        self.assertEqual(self._message({}).failure_explanation, "WhatsApp did not say why.")

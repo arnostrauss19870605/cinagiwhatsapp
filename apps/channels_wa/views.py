@@ -11,6 +11,7 @@ from .forms import ChannelConnectForm, TestMessageForm
 from .models import WhatsAppChannel
 
 
+
 @login_required
 def channel_list(request):
     if request.workspace is None:
@@ -89,18 +90,62 @@ def verify(request, pk):
         test_form = TestMessageForm(request.POST)
         if test_form.is_valid():
             number = test_form.cleaned_data["to_number"]
-            result = channel.client().send_text(
-                number,
+            # Send through the normal outbound path so the message is stored with
+            # its wamid. WhatsApp accepts a send (HTTP 200) and only reports
+            # failure later, on the status webhook - without a stored message
+            # there is nothing for that callback to attach to, and the send
+            # looks successful forever.
+            from apps.channels_wa.outbound import send_text
+            from apps.contacts.models import Contact
+            from apps.inbox.models import Conversation, Message
+
+            contact, _ = Contact.objects.get_or_create(
+                workspace=request.workspace,
+                wa_id=number,
+                defaults={"display_name": "Connection test"},
+            )
+            conversation = (
+                Conversation.objects.for_request(request)
+                .filter(contact=contact, status__in=Conversation.OPEN_STATUSES)
+                .first()
+            ) or Conversation.objects.create(
+                workspace=request.workspace,
+                channel=channel,
+                contact=contact,
+                status=Conversation.Status.BOT,
+                subject="Connection test",
+            )
+            message = send_text(
+                conversation,
                 f"Test message from {request.workspace.name}. If you can read this, "
                 f"{channel.display_name} is connected correctly.",
+                author=request.user,
+                actor=Message.Actor.BOT,
+                payload={"connection_test": True},
             )
-            if result.blocked_reason:
-                test_result = ("warning", result.blocked_reason)
-            elif result.ok:
-                test_result = ("ok", f"Sent. Check WhatsApp on +{number}.")
+            if message.wa_status == Message.Status.BLOCKED:
+                test_result = ("warning", message.wa_error.get("reason", ""))
+            elif message.wa_status == Message.Status.FAILED:
+                test_result = ("error", message.wa_error.get("reason", "WhatsApp rejected it."))
             else:
-                test_result = ("error", result.error or "WhatsApp did not accept the message.")
+                test_result = (
+                    "ok",
+                    f"WhatsApp accepted it for +{number}. Refresh this page in a few "
+                    "seconds to see whether it was actually delivered.",
+                )
+            request.session["last_test_message_id"] = str(message.pk)
             audit("channel.test_send", request=request, target=channel, outcome=test_result[0])
+
+    # The real answer to "did it arrive" comes from the status webhook, so show
+    # the stored status of the last test rather than what the API said at send time.
+    last_test = None
+    last_test_id = request.session.get("last_test_message_id")
+    if last_test_id:
+        from apps.inbox.models import Message
+
+        last_test = (
+            Message.objects.for_request(request).filter(pk=last_test_id).first()
+        )
 
     return render(
         request,
@@ -111,6 +156,7 @@ def verify(request, pk):
             "error": error,
             "test_form": test_form,
             "test_result": test_result,
+            "last_test": last_test,
         },
     )
 

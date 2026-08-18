@@ -91,6 +91,40 @@
         {% elif test_result.0 == 'warning' %}bg-amber-50 text-amber-900
         {% else %}bg-rose-50 text-rose-800{% endif %}">{{ test_result.1 }}</p>
     {% endif %}
+
+    {% if last_test %}
+      <div class="mt-3 rounded-xl border border-slate-200 p-3 text-sm"
+           hx-get="{% url 'channels_wa:verify' channel.pk %}"
+           hx-trigger="every 5s" hx-select="#test-status" hx-target="this" hx-swap="innerHTML">
+        <div id="test-status">
+          <p class="text-xs uppercase tracking-wide text-slate-400">Last test message</p>
+          <p class="mt-1">
+            To {{ last_test.conversation.contact.pretty_number }} &middot;
+            {% if last_test.wa_status == 'read' %}
+              <span class="font-medium text-sky-700">Read on the phone</span>
+            {% elif last_test.wa_status == 'delivered' %}
+              <span class="font-medium text-emerald-700">Delivered to the phone</span>
+            {% elif last_test.wa_status == 'sent' %}
+              <span class="font-medium text-slate-700">Accepted by WhatsApp, not delivered yet</span>
+            {% elif last_test.wa_status == 'failed' %}
+              <span class="font-medium text-rose-700">Not delivered</span>
+            {% elif last_test.wa_status == 'blocked' %}
+              <span class="font-medium text-amber-700">Not sent (test mode)</span>
+            {% else %}
+              <span class="text-slate-600">Sending</span>
+            {% endif %}
+          </p>
+          {% if last_test.wa_status == 'failed' %}
+            <p class="mt-2 text-rose-800">{{ last_test.failure_explanation }}</p>
+          {% elif last_test.wa_status == 'sent' %}
+            <p class="mt-2 text-xs text-slate-500">
+              WhatsApp accepts a message before it tries to deliver it. If this does not
+              change within a minute, it did not reach the handset.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
   </div>
 
   <div class="mt-6 flex gap-2">

@@ -239,6 +239,29 @@ class Message(WorkspaceScopedModel):
             "failed": "alert",
         }.get(self.wa_status, "clock")
 
+    @property
+    def failure_explanation(self):
+        """Plain words for why WhatsApp would not deliver this message."""
+        help_text = {
+            131026: "That number cannot receive WhatsApp messages. Check the number is "
+            "right and that WhatsApp is active on the handset.",
+            131047: "More than 24 hours have passed since that person last messaged you, "
+            "so WhatsApp only allows an approved template.",
+            131030: "That number is not in the Meta app's allowed recipient list. That "
+            "limit applies while the app is unpublished.",
+            132000: "The template's placeholders do not match what Meta approved.",
+            190: "The access token has expired or been revoked. Reconnect the number.",
+        }
+        error = self.wa_error or {}
+        if "errors" in error and error["errors"]:
+            error = error["errors"][0]
+        code = error.get("code")
+        detail = error.get("title") or error.get("message") or error.get("reason") or ""
+        explained = help_text.get(code)
+        if explained and detail:
+            return f"{explained} (WhatsApp said: {detail})"
+        return explained or detail or "WhatsApp did not say why."
+
     def advance_status(self, new_status, at=None):
         """Status only ever moves forward - a late 'delivered' never undoes 'read'."""
         current = self.STATUS_ORDER.get(self.wa_status, 0)
