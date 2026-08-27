@@ -12,7 +12,7 @@ def send_rsvp_confirmation(guest_id):
     """Confirm a website-form RSVP on WhatsApp.
 
     A form guest has not messaged us, so no free window is open and the only
-    way to reach them is the approved `event_rsvp_received` template. If Meta
+    way to reach them is the approved `event_rsvp_received_v2` template. If Meta
     has not approved it yet the send is skipped and noted on the journey - the
     RSVP itself is already safely on the roster.
     """
@@ -52,13 +52,13 @@ def send_rsvp_confirmation(guest_id):
         MessageTemplate.objects.for_workspace(guest.workspace)
         .filter(
             channel=channel,
-            name="event_rsvp_received",
+            name="event_rsvp_received_v2",
             status=MessageTemplate.Status.APPROVED,
         )
         .first()
     )
     if template is None:
-        return skip("the 'event_rsvp_received' template is not approved yet")
+        return skip("the 'event_rsvp_received_v2' template is not approved yet")
 
     contact, _ = Contact.objects.get_or_create(
         workspace=guest.workspace,
@@ -89,7 +89,12 @@ def send_rsvp_confirmation(guest_id):
     message = send_template(
         conversation,
         template,
-        [guest.first_name, str(guest.guest_number or ""), guest.event.date_label()],
+        [
+            guest.first_name,
+            str(guest.guest_number or ""),
+            guest.event.date_label(),
+            guest.event.doors_label(),
+        ],
         actor=Message.Actor.BOT,
     )
     JourneyEvent.objects.create(

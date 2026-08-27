@@ -105,7 +105,7 @@ def _ask_rsvp(conversation, guest):
     send_text(
         conversation,
         f"Hi {guest.first_name}, good to hear from you.\n\n"
-        f"{event.name}\n{event.date_label()}, doors from 08h30\n{event.venue}\n\n"
+        f"{event.name}\n{event.date_label()}, doors from {event.doors_label()}\n{event.venue}\n\n"
         "Can you make it? Reply with a number:\n"
         "1  Yes, I will be there\n"
         "2  I am based outside Gauteng and would like the launch pack sent to me\n"
@@ -166,7 +166,7 @@ def _confirm(conversation, guest, status):
         send_text(
             conversation,
             f"You are in, {guest.first_name} - guest number {guest.guest_number}.\n\n"
-            f"{event.date_label()}, registration from 08h30\n{event.venue}\n\n"
+            f"{event.date_label()}, registration from {event.doors_label()}\n{event.venue}\n\n"
             "I will send your entry code closer to the time. Anything you need before "
             "then, just ask me here.\n\n"
             "Is anyone coming with you? Reply +1 or +2, or just say no.",

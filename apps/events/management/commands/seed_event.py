@@ -23,9 +23,9 @@ VENUE = "63 Bryanston Dr, Bryanston, Sandton, 2191"
 VENUE_LAT = -26.061599748687517
 VENUE_LNG = 28.011626297142122
 
-# Registration from 08h30, keynote at 09h15 - the times the approved template
-# copy promises, so they are fixed here to match.
-DOORS = dt.time(8, 30)
+# Registration from 08h00, keynote at 09h15. The time reaches the template as
+# a variable via Event.doors_label, so this is the one place it is written.
+DOORS = dt.time(8, 0)
 KEYNOTE = dt.time(9, 15)
 
 

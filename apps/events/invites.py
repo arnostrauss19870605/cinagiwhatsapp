@@ -19,7 +19,7 @@ BODY = """\
 
     <p style="margin:0 0 16px">
       We are hosting our annual product update and launch, and we would like you there.
-      Three announcements, live demos, and breakfast from 08h30.
+      Three announcements, live demos, and breakfast from 08h00.
     </p>
 
     <p style="margin:0 0 24px">

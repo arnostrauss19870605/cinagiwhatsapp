@@ -239,7 +239,7 @@ class RsvpConfirmationTests(TestCase):
     """The WhatsApp confirmation that follows a website-form RSVP.
 
     The guest has never messaged us, so no free window exists and the send
-    must go out as the approved `event_rsvp_received` template. Approval is
+    must go out as the approved `event_rsvp_received_v2` template. Approval is
     Meta's to give, so the roster must survive the template not existing yet.
     """
 
@@ -262,11 +262,11 @@ class RsvpConfirmationTests(TestCase):
         self.template = MessageTemplate.objects.create(
             workspace=self.workspace,
             channel=self.channel,
-            name="event_rsvp_received",
+            name="event_rsvp_received_v2",
             language="en",
             status=MessageTemplate.Status.APPROVED,
             components=[
-                {"type": "BODY", "text": "Thanks {{1}}, you are guest number {{2}}. {{3}}."}
+                {"type": "BODY", "text": "Thanks {{1}}, you are guest number {{2}}. {{3}}, from {{4}}."}
             ],
         )
         self.url = f"/e/register/{self.event.pk}/"
@@ -301,7 +301,7 @@ class RsvpConfirmationTests(TestCase):
         self.assertEqual(message.conversation.contact, guest.contact)
         self.assertEqual(
             message.payload["values"],
-            ["Thabo", "1", self.event.date_label()],
+            ["Thabo", "1", self.event.date_label(), self.event.doors_label()],
         )
         self.assertIn("rsvp_confirmation_sent", guest.journey.values_list("step", flat=True))
 
@@ -332,12 +332,15 @@ class RsvpConfirmationTests(TestCase):
     def test_the_definition_in_the_pack_matches_what_the_task_sends(self):
         from apps.library.event_templates import BY_NAME
 
-        definition = BY_NAME["event_rsvp_received"]
+        definition = BY_NAME["event_rsvp_received_v2"]
         self.assertEqual(definition["category"], "UTILITY")
         body = next(c for c in definition["components"] if c["type"] == "BODY")
-        # Three variables: first name, guest number, date label - what the task passes.
-        self.assertIn("{{3}}", body["text"])
-        self.assertNotIn("{{4}}", body["text"])
+        # Four variables: first name, guest number, date label, doors label -
+        # what the task passes. The date AND the time are variables so moving
+        # either costs no Meta re-review.
+        self.assertIn("{{4}}", body["text"])
+        self.assertNotIn("{{5}}", body["text"])
+        self.assertNotIn("08h", body["text"], "times must never be baked into approved copy")
         self.assertNotIn(
             "HEADER", [c["type"] for c in definition["components"]],
             "a media header would make the auto-send depend on minting a ticket image",

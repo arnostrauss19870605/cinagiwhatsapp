@@ -104,6 +104,12 @@ class Event(WorkspaceScopedModel, TimeStampedModel):
         local = timezone.localtime(self.starts_at)
         return f"{local.day} {local:%B}"
 
+    def doors_label(self):
+        """'08h00' - how the doors time reads in a message. Passed to templates
+        as a variable, like the date, so moving the time costs no Meta review."""
+        local = timezone.localtime(self.doors_open_at or self.starts_at)
+        return f"{local:%H}h{local:%M}"
+
     def next_guest_number(self):
         return (
             self.guests.filter(guest_number__isnull=False)

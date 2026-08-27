@@ -189,7 +189,10 @@ TEMPLATES = [
         # The copy reads like a booking receipt, not an invitation - Meta's
         # category checker rejected a first version naming the launch as
         # INCORRECT_CATEGORY, because promoting the event is MARKETING.
-        "name": "event_rsvp_received",
+        # _v2 exists because Meta allows one edit per 24 hours on an active
+        # template and the day's edit was spent; a fresh name reviews as a new
+        # template. v1 (time baked as 08h30) can be deleted in WhatsApp Manager.
+        "name": "event_rsvp_received_v2",
         "category": "UTILITY",
         "send_from": dt.date(2026, 8, 25),
         "send_until": EVENT_DATE,
@@ -197,13 +200,14 @@ TEMPLATES = [
             body(
                 "Thanks {{1}}, your RSVP is confirmed. You are guest number {{2}}.\n\n"
                 "Date: {{3}}\n"
-                "Registration: from 08h30\n"
+                "Registration: from {{4}}\n"
                 "Venue: Bryanston\n\n"
                 "Your entry code will be sent to you closer to the day. Reply here "
                 "if anything about your booking needs to change.",
                 "Thabo",
                 "84",
                 "Wednesday 30 September",
+                "08h00",
             ),
             footer(),
             buttons("Add to calendar", "Send venue pin", "Cinagi Consultant"),
@@ -217,7 +221,7 @@ TEMPLATES = [
         "components": [
             body(
                 "Hi {{1}}, we are on for tomorrow.\n\n"
-                "Doors and breakfast from 08h30, keynote at 09h15. Parking is free - "
+                "Doors and breakfast from 08h00, keynote at 09h15. Parking is free - "
                 "please follow the Cinagi banners.\n\n"
                 "Still joining us?",
                 "Thabo",
@@ -235,7 +239,7 @@ TEMPLATES = [
             image_header(),
             body(
                 "Morning {{1}}, today is the day.\n\n"
-                "Doors are open from 08h30 and here is your code again. See you shortly.",
+                "Doors are open from 08h00 and here is your code again. See you shortly.",
                 "Thabo",
             ),
             footer(),
