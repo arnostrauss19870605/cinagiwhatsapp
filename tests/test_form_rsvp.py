@@ -212,7 +212,7 @@ class RsvpConfirmationTests(TestCase):
     """The WhatsApp confirmation that follows a website-form RSVP.
 
     The guest has never messaged us, so no free window exists and the send
-    must go out as the approved `event_rsvp_received` template. Approval is
+    must go out as the approved `event_registration_received` template. Approval is
     Meta's to give, so the roster must survive the template not existing yet.
     """
 
@@ -235,7 +235,7 @@ class RsvpConfirmationTests(TestCase):
         self.template = MessageTemplate.objects.create(
             workspace=self.workspace,
             channel=self.channel,
-            name="event_rsvp_received",
+            name="event_registration_received",
             language="en",
             status=MessageTemplate.Status.APPROVED,
             components=[
@@ -305,7 +305,7 @@ class RsvpConfirmationTests(TestCase):
     def test_the_definition_in_the_pack_matches_what_the_task_sends(self):
         from apps.library.event_templates import BY_NAME
 
-        definition = BY_NAME["event_rsvp_received"]
+        definition = BY_NAME["event_registration_received"]
         self.assertEqual(definition["category"], "UTILITY")
         body = next(c for c in definition["components"] if c["type"] == "BODY")
         # Three variables: first name, guest number, date label - what the task passes.

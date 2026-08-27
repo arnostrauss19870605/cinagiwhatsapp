@@ -189,7 +189,10 @@ TEMPLATES = [
         # The copy reads like a booking receipt, not an invitation - Meta's
         # category checker rejected a first version naming the launch as
         # INCORRECT_CATEGORY, because promoting the event is MARKETING.
-        "name": "event_rsvp_received",
+        # Named _registration_ because an earlier event_rsvp_received got stuck
+        # in edit re-review; a fresh name is reviewed as a new template, which
+        # is faster. The old name can be deleted in WhatsApp Manager.
+        "name": "event_registration_received",
         "category": "UTILITY",
         "send_from": dt.date(2026, 8, 25),
         "send_until": EVENT_DATE,
