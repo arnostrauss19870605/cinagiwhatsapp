@@ -1,8 +1,10 @@
-"""Message templates for the 30 September 2026 event, as data.
+"""Message templates for the 16 September 2026 event, as data.
 
 Kept in version control so the whole set can be submitted, reviewed and
 re-submitted for the next event without anyone retyping copy into a web form.
-Submit with:  python manage.py submit_templates
+
+    python manage.py submit_templates --dry-run
+    python manage.py submit_templates
 
 Rules encoded here, learned the hard way:
   * language is "en" everywhere - there is no en_ZA, and the code must match
@@ -11,11 +13,45 @@ Rules encoded here, learned the hard way:
     anything promoting the event to someone who has not said yes is MARKETING;
   * samples must look like real values - placeholder-looking samples get the
     template rejected;
-  * quick-reply button text stays under 20 characters so it does not truncate
-    on a narrow phone.
+  * quick-reply button text stays under 20 characters so it does not truncate;
+  * every template carries the same footer, because a person must always be
+    able to reach a person. Buttons are capped at three and are often full;
+    a footer costs no button slot and cannot be crowded out;
+  * every template declares the window in which sending it makes sense. An
+    invite to an event that has happened is worse than no invite at all, so
+    the app refuses to send outside that window rather than trusting a human
+    to remember.
 """
 
+import datetime as dt
+
 LANGUAGE = "en"
+
+# The one place the date lives. Change it here and every send window re-bases
+# automatically. Crucially, the date is NOT written into the approved copy: it
+# is passed as a variable at send time, so moving the event costs nothing at
+# Meta. Baking a date into template text means ten edits, ten re-reviews and a
+# 24-hour cooling-off period on each - and Meta does not care that your venue
+# moved.
+EVENT_DATE = dt.date(2026, 9, 30)          # Wednesday 30 September 2026
+
+
+def event_label(date=None):
+    """How the date reads inside a message: 'Wednesday 30 September'."""
+    date = date or EVENT_DATE
+    return f"{date:%A} {date.day} {date:%B}"
+
+
+def short_label(date=None):
+    """'30 September' - for mid-sentence use."""
+    date = date or EVENT_DATE
+    return f"{date.day} {date:%B}"
+
+# The escape hatch, on every single template. 41 characters; Meta allows 60.
+HUMAN_FOOTER = "Reply AGENT any time to talk to a person."
+
+# Words that must always reach a human, whatever else is going on.
+HUMAN_KEYWORDS = ["agent", "human", "person", "help", "speak to someone", "operator"]
 
 # Header media samples. Meta only needs a representative file for review; the
 # real image or document is supplied per send.
@@ -30,10 +66,14 @@ def body(text, *examples):
     return component
 
 
+def footer(text=HUMAN_FOOTER):
+    return {"type": "FOOTER", "text": text}
+
+
 def buttons(*labels):
     return {
         "type": "BUTTONS",
-        "buttons": [{"type": "QUICK_REPLY", "text": label} for label in labels],
+        "buttons": [{"type": "QUICK_REPLY", "text": label} for label in labels[:3]],
     }
 
 
@@ -47,82 +87,150 @@ def document_header():
 
 TEMPLATES = [
     {
-        "name": "event_rsvp_reminder",
+        "name": "event_invite",
         "category": "MARKETING",
+        "send_from": dt.date(2026, 8, 25),
+        "send_until": EVENT_DATE - dt.timedelta(days=1),
         "components": [
             body(
-                "Hi {{1}}, seats for the Cinagi Product Launch on 30 September are filling up "
-                "and I have not heard back from you yet.\n\n"
-                "Tap below if you would like one, or let me know if you would rather join the "
-                "online stream.",
+                "Hi {{1}}, Cinagi is hosting its Annual Product Update and Launch on "
+                "{{2}} in Bryanston, and we would like you there.\n\n"
+                "Three product announcements, live demos, and breakfast from 08h30.\n\n"
+                "Tap below and I will take your RSVP right here in this chat. It takes "
+                "about a minute.",
                 "Thabo",
+                "Wednesday 30 September",
             ),
-            buttons("Count me in", "Send stream link", "Not this time"),
+            footer(),
+            buttons("RSVP now", "Not this time", "Talk to a human"),
+        ],
+    },
+    {
+        "name": "event_rsvp_reminder",
+        "category": "MARKETING",
+        "send_from": dt.date(2026, 9, 5),
+        "send_until": EVENT_DATE - dt.timedelta(days=1),
+        "components": [
+            body(
+                "Hi {{1}}, seats for the Cinagi Product Launch on {{2}} are filling up "
+                "and I have not heard back from you yet.\n\n"
+                "Tap below if you would like one, or let me know if you are "
+                "unavailable to attend.",
+                "Thabo",
+                "30 September",
+            ),
+            footer(),
+            buttons("Count me in", "Send launch pack", "Not this time"),
         ],
     },
     {
         "name": "event_agenda_reveal",
         "category": "MARKETING",
+        "send_from": dt.date(2026, 9, 2),
+        "send_until": EVENT_DATE - dt.timedelta(days=1),
         "components": [
             image_header(),
             body(
-                "Hi {{1}}, the agenda for 30 September is out.\n\n"
-                "Based on what you told me, the session on {{2}} is the one to watch. It runs "
-                "mid-morning, right after the keynote.\n\n"
+                "Hi {{1}}, the agenda for {{2}} is out.\n\n"
+                "Based on what you told me, the session on {{3}} is the one to watch. "
+                "It runs mid-morning, right after the keynote.\n\n"
                 "The full agenda is in the image above. Ask me anything about it.",
                 "Thabo",
+                "30 September",
                 "API integrations",
             ),
-            buttons("Ask about the agenda"),
+            footer(),
+            buttons("Ask about the agenda", "Talk to a human"),
         ],
     },
     {
         "name": "event_teaser",
         "category": "MARKETING",
+        "send_from": dt.date(2026, 9, 9),
+        "send_until": EVENT_DATE - dt.timedelta(days=1),
         "components": [
             image_header(),
             body(
                 "Hi {{1}}, one week to go.\n\n"
-                "We are announcing three things on 30 September. One of them has been the "
+                "We are announcing three things on {{2}}. One of them has been the "
                 "single most requested item from brokers for two years running.\n\n"
                 "Want to guess which?",
                 "Thabo",
+                "30 September",
             ),
-            buttons("Guess the announcement", "See the agenda"),
+            footer(),
+            buttons("Guess the announcement", "See the agenda", "Talk to a human"),
         ],
     },
     {
         "name": "event_rsvp_confirmed",
         "category": "UTILITY",
+        "send_from": dt.date(2026, 8, 25),
+        "send_until": EVENT_DATE,
         "components": [
             image_header(),
             body(
                 "You are confirmed, {{1}}. You are guest number {{2}}.\n\n"
-                "Wednesday 30 September, registration from 08h30, Bryanston.\n\n"
+                "{{3}}, registration from 08h30, Bryanston.\n\n"
                 "Show the code above at the door. It is also your entry into the lucky draw.",
                 "Thabo",
                 "84",
+                "Wednesday 30 September",
             ),
-            buttons("Add to calendar", "Send venue pin", "Ask a question"),
+            footer(),
+            buttons("Add to calendar", "Send venue pin", "Talk to a human"),
+        ],
+    },
+    {
+        # Sent automatically when an RSVP arrives from the website form. The
+        # guest has not messaged us, so no window is open and only a template
+        # can reach them. Text-only on purpose: the QR ticket comes later, and
+        # a media header would make the auto-send depend on minting one.
+        # The copy reads like a booking receipt, not an invitation - Meta's
+        # category checker rejected a first version naming the launch as
+        # INCORRECT_CATEGORY, because promoting the event is MARKETING.
+        "name": "event_rsvp_received",
+        "category": "UTILITY",
+        "send_from": dt.date(2026, 8, 25),
+        "send_until": EVENT_DATE,
+        "components": [
+            body(
+                "Thanks {{1}}, your RSVP is confirmed. You are guest number {{2}}.\n\n"
+                "Date: {{3}}\n"
+                "Registration: from 08h30\n"
+                "Venue: Bryanston\n\n"
+                "Your entry code will be sent to you closer to the day. Reply here "
+                "if anything about your booking needs to change.",
+                "Thabo",
+                "84",
+                "Wednesday 30 September",
+            ),
+            footer(),
+            buttons("Add to calendar", "Send venue pin", "Talk to a human"),
         ],
     },
     {
         "name": "event_logistics",
         "category": "UTILITY",
+        "send_from": EVENT_DATE - dt.timedelta(days=1),
+        "send_until": EVENT_DATE - dt.timedelta(days=1),
         "components": [
             body(
                 "Hi {{1}}, we are on for tomorrow.\n\n"
-                "Doors and breakfast from 08h30, keynote at 09h15. Parking is free in the "
-                "basement. Take the P2 level and the lifts to reception.\n\n"
+                "Doors and breakfast from 08h30, keynote at 09h15. Parking is free - "
+                "please follow the Cinagi banners.\n\n"
                 "Still joining us?",
                 "Thabo",
             ),
-            buttons("I am still in", "Plans changed"),
+            footer(),
+            buttons("I am still in", "Plans changed", "Talk to a human"),
         ],
     },
     {
         "name": "event_morning",
         "category": "UTILITY",
+        "send_from": EVENT_DATE,
+        "send_until": EVENT_DATE,
         "components": [
             image_header(),
             body(
@@ -130,12 +238,15 @@ TEMPLATES = [
                 "Doors are open from 08h30 and here is your code again. See you shortly.",
                 "Thabo",
             ),
-            buttons("Send venue pin", "Running late"),
+            footer(),
+            buttons("Send venue pin", "Running late", "Talk to a human"),
         ],
     },
     {
         "name": "event_feedback",
         "category": "UTILITY",
+        "send_from": EVENT_DATE,
+        "send_until": EVENT_DATE + dt.timedelta(days=2),
         "components": [
             body(
                 "Hi {{1}}, thank you for joining us today.\n\n"
@@ -143,26 +254,33 @@ TEMPLATES = [
                 "How was it?",
                 "Thabo",
             ),
+            footer(),
             buttons("Excellent", "Good", "Could be better"),
         ],
     },
     {
         "name": "event_recap",
         "category": "UTILITY",
+        "send_from": EVENT_DATE,
+        "send_until": EVENT_DATE + dt.timedelta(days=14),
         "components": [
             document_header(),
             body(
-                "Here is everything from Wednesday, {{1}}. The slides, the demo links and "
-                "the photos.\n\n"
+                "Here is everything from {{2}}, {{1}}. The slides, the demo links "
+                "and the photos.\n\n"
                 "This chat stays open. Ask me anything about what we launched, any time.",
                 "Thabo",
+                "Wednesday",
             ),
-            buttons("Book a demo", "Talk to my AM"),
+            footer(),
+            buttons("Book a demo", "Talk to my AM", "Talk to a human"),
         ],
     },
     {
         "name": "event_demo_booking",
         "category": "MARKETING",
+        "send_from": EVENT_DATE + dt.timedelta(days=1),
+        "send_until": EVENT_DATE + dt.timedelta(days=30),
         "components": [
             body(
                 "Hi {{1}}, you asked good questions about the Co-pilot last week.\n\n"
@@ -170,7 +288,34 @@ TEMPLATES = [
                 "Pick a slot below.",
                 "Thabo",
             ),
-            buttons("See available times", "Not right now"),
+            footer(),
+            buttons("See available times", "Not right now", "Talk to a human"),
         ],
     },
 ]
+
+BY_NAME = {definition["name"]: definition for definition in TEMPLATES}
+
+
+def sendable_on(name, on=None):
+    """Should this template go out today? Returns (allowed, reason).
+
+    Templates not defined here (anything outside the event campaign) are always
+    allowed - this guard exists for the event, not for the support line.
+    """
+    definition = BY_NAME.get(name)
+    if definition is None:
+        return True, ""
+    on = on or dt.date.today()
+    starts, ends = definition.get("send_from"), definition.get("send_until")
+    if starts and on < starts:
+        return False, (
+            f"'{name}' is not due to go out until {starts:%-d %B %Y}. Sending it early "
+            "would spoil the sequence."
+        )
+    if ends and on > ends:
+        return False, (
+            f"'{name}' was for the event on {EVENT_DATE:%-d %B %Y} and stopped being "
+            f"sendable after {ends:%-d %B %Y}."
+        )
+    return True, ""

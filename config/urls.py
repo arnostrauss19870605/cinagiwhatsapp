@@ -18,6 +18,7 @@ urlpatterns = [
     path("library/", include(("apps.library.urls", "library"), namespace="library")),
     path("agents/", include(("apps.agents.urls", "agents"), namespace="agents")),
     path("wa/", include(("apps.channels_wa.urls", "channels_wa"), namespace="channels_wa")),
+    path("e/", include(("apps.events.urls", "events"), namespace="events")),
 ]
 
 if settings.DEBUG:

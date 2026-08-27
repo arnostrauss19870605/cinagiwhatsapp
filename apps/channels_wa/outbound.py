@@ -50,7 +50,57 @@ def send_text(conversation, body, *, author=None, actor=Message.Actor.AGENT, sni
     return _finish(conversation, message, result)
 
 
+def send_location(conversation, latitude, longitude, *, name="", address="", author=None, actor=Message.Actor.AGENT):
+    message = Message(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.OUT,
+        actor=actor,
+        author=author,
+        kind=Message.Kind.LOCATION,
+        body=address or name,
+        payload={"latitude": latitude, "longitude": longitude, "name": name, "address": address},
+    )
+    result = conversation.channel.client().send_location(
+        conversation.contact.wa_id, latitude, longitude, name=name, address=address
+    )
+    return _finish(conversation, message, result)
+
+
 def send_template(conversation, template, values, *, author=None, actor=Message.Actor.AGENT):
+    # An invitation to an event that has already happened is worse than no
+    # invitation, so the campaign window is enforced here rather than trusted
+    # to whoever is clicking send.
+    from apps.library.event_templates import sendable_on
+
+    # STOP is absolute. A template is always business-initiated, so this is the
+    # one place it has to be checked - an agent replying inside an open window
+    # is a conversation the customer started and is not covered by opt-out.
+    allowed, reason = True, ""
+    if conversation.contact.is_opted_out:
+        allowed = False
+        reason = (
+            f"{conversation.contact.name} opted out on "
+            f"{conversation.contact.opted_out_at:%-d %B %Y}. Templates are not sent to "
+            "contacts who have replied STOP."
+        )
+    else:
+        allowed, reason = sendable_on(template.name)
+    if not allowed:
+        from apps.channels_wa.messaging.base import SendResult
+
+        message = Message(
+            workspace=conversation.workspace,
+            conversation=conversation,
+            direction=Message.Direction.OUT,
+            actor=actor,
+            author=author,
+            kind=Message.Kind.TEMPLATE,
+            body=template.preview(values),
+            template=template,
+        )
+        return _finish(conversation, message, SendResult(ok=False, blocked_reason=reason))
+
     components = template.build_components(values)
     message = Message(
         workspace=conversation.workspace,

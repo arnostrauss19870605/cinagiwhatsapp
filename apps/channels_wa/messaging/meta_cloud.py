@@ -142,6 +142,14 @@ class MetaCloudChannel(MessagingChannel):
             media["filename"] = filename
         return self._post_message(to, {"type": kind, kind: media})
 
+    def send_location(self, to, latitude, longitude, *, name="", address=""):
+        location = {"latitude": latitude, "longitude": longitude}
+        if name:
+            location["name"] = name
+        if address:
+            location["address"] = address
+        return self._post_message(to, {"type": "location", "location": location})
+
     def send_buttons(self, to, body, buttons, *, header="", footer=""):
         interactive = {
             "type": "button",
@@ -227,6 +235,18 @@ class MetaCloudChannel(MessagingChannel):
         response = self._request(
             "POST", f"{self.base_url}/{self.channel.waba_id}/message_templates", json=payload
         )
+        return self._safe_json(response)
+
+    def update_template(self, template_id, components, category=None):
+        """Edit an existing template. Keeps its approval and re-enters review.
+
+        Meta allows one edit per 24 hours on an active template, so this is not
+        something to call in a loop.
+        """
+        payload = {"components": components}
+        if category:
+            payload["category"] = category
+        response = self._request("POST", f"{self.base_url}/{template_id}", json=payload)
         return self._safe_json(response)
 
     def upload_sample_media(self, path, app_id, mime_type):

@@ -35,6 +35,9 @@ class MessagingChannel:
     def send_media(self, to, media_id_or_url, *, kind="image", caption="", filename=""):
         raise NotImplementedError
 
+    def send_location(self, to, latitude, longitude, *, name="", address=""):
+        raise NotImplementedError
+
     def send_buttons(self, to, body, buttons, *, header="", footer=""):
         raise NotImplementedError
 

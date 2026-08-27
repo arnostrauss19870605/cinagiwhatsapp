@@ -44,6 +44,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Skip templates that need a sample image or document.",
         )
+        parser.add_argument(
+            "--update",
+            action="store_true",
+            help="Rewrite templates that already exist on Meta (one edit per 24h is allowed).",
+        )
 
     def handle(self, *args, **options):
         from apps.channels_wa.messaging import get_channel_client
@@ -69,10 +74,13 @@ class Command(BaseCommand):
         client = get_channel_client(channel)
 
         wanted = set(options["only"] or [])
-        existing = set()
+        existing = {}
         if not options["dry_run"]:
             try:
-                existing = {t.get("name") for t in client.fetch_templates()}
+                existing = {
+                    t.get("name"): t for t in client.fetch_templates()
+                    if t.get("language") == LANGUAGE
+                }
             except Exception as exc:  # the account may simply have none yet
                 self.stdout.write(self.style.WARNING(f"Could not list existing templates: {exc}"))
 
@@ -81,8 +89,10 @@ class Command(BaseCommand):
             name = definition["name"]
             if wanted and name not in wanted:
                 continue
-            if name in existing:
-                self.stdout.write(f"  = {name}: already exists, skipping")
+            if name in existing and not options["update"]:
+                self.stdout.write(
+                    f"  = {name}: already on Meta, skipping (use --update to rewrite it)"
+                )
                 skipped += 1
                 continue
 
@@ -113,14 +123,17 @@ class Command(BaseCommand):
                 continue
 
             try:
-                result = client.create_template(payload)
+                if name in existing:
+                    client.update_template(existing[name]["id"], components)
+                    verb = "updated"
+                else:
+                    result = client.create_template(payload)
+                    verb = f"submitted ({result.get('status', 'PENDING')})"
             except Exception as exc:
                 self.stdout.write(self.style.ERROR(f"  x {name}: {getattr(exc, 'friendly', exc)}"))
                 failed += 1
                 continue
-            self.stdout.write(
-                self.style.SUCCESS(f"  + {name}: submitted ({result.get('status', 'PENDING')})")
-            )
+            self.stdout.write(self.style.SUCCESS(f"  + {name}: {verb}"))
             submitted += 1
 
         if options["dry_run"]:

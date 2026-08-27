@@ -60,6 +60,8 @@ INSTALLED_APPS = [
     "apps.agents",
     "apps.library",
     "apps.inbox",
+    "apps.events",
+    "apps.integrations",
 ]
 
 MIDDLEWARE = [
@@ -183,6 +185,7 @@ CELERY_TASK_ROUTES = {
     "apps.channels_wa.tasks.process_inbound_payload": {"queue": "webhooks"},
     "apps.channels_wa.tasks.send_message": {"queue": "outbound"},
     "apps.channels_wa.tasks.sync_templates": {"queue": "default"},
+    "apps.events.tasks.send_rsvp_confirmation": {"queue": "outbound"},
     "apps.ai.*": {"queue": "ai"},
 }
 
@@ -223,6 +226,18 @@ OUTBOUND_ALLOWLIST = env_list("OUTBOUND_ALLOWLIST")
 FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY") or base64.urlsafe_b64encode(
     hashlib.sha256(SECRET_KEY.encode()).digest()
 ).decode()
+
+# --- Microsoft Graph (invitation email) --------------------------------------
+# App-only credentials. The invite email carries each guest's personal wa.me
+# link, so the guest starts the WhatsApp conversation and everything that
+# follows happens inside their free 24 hour window.
+
+MS_GRAPH_TENANT_ID = env("MS_GRAPH_TENANT_ID")
+MS_GRAPH_CLIENT_ID = env("MS_GRAPH_CLIENT_ID")
+MS_GRAPH_CLIENT_SECRET = env("MS_GRAPH_CLIENT_SECRET")
+MS_GRAPH_SENDER = env("MS_GRAPH_SENDER")
+MS_GRAPH_BASE_URL = env("MS_GRAPH_BASE_URL", "https://graph.microsoft.com/v1.0")
+MS_GRAPH_SCOPES = env("MS_GRAPH_SCOPES", "https://graph.microsoft.com/.default")
 
 # --- Security ---------------------------------------------------------------
 

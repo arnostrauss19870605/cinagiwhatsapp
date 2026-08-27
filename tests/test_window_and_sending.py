@@ -197,3 +197,107 @@ class FailureExplanationTests(TestCase):
 
     def test_unknown_error_still_says_something(self):
         self.assertEqual(self._message({}).failure_explanation, "WhatsApp did not say why.")
+
+
+class HumanEscapeHatchTests(TestCase):
+    """Every template promises 'Reply AGENT any time'. That promise is kept here."""
+
+    def test_asking_for_a_person_is_recognised(self):
+        from apps.channels_wa.inbound import _wants_a_human
+
+        for text in ["agent", "AGENT", "human", "  Help ", "can I speak to someone",
+                     "talk to a person please"]:
+            self.assertTrue(_wants_a_human(text), f"{text!r} should reach a human")
+
+    def test_ordinary_messages_are_not_escalated(self):
+        from apps.channels_wa.inbound import _wants_a_human
+
+        for text in ["", "What time does the keynote start on Wednesday morning?",
+                     "Yes please, I would like to come along to the launch event"]:
+            self.assertFalse(_wants_a_human(text), f"{text!r} should not escalate")
+
+
+class CampaignWindowTests(TestCase):
+    """An invitation to an event that has happened is worse than no invitation."""
+
+    # Dates are derived from EVENT_DATE, never written down, so these keep
+    # passing when the event moves - which is the whole point.
+
+    def test_template_is_sendable_inside_its_window(self):
+        import datetime as dt
+        from apps.library.event_templates import BY_NAME, sendable_on
+
+        inside = BY_NAME["event_invite"]["send_from"] + dt.timedelta(days=1)
+        self.assertTrue(sendable_on("event_invite", inside)[0])
+
+    def test_template_is_refused_after_the_event(self):
+        import datetime as dt
+        from apps.library.event_templates import EVENT_DATE, sendable_on
+
+        allowed, reason = sendable_on("event_invite", EVENT_DATE + dt.timedelta(days=4))
+        self.assertFalse(allowed)
+        self.assertIn(f"{EVENT_DATE.day} {EVENT_DATE:%B}", reason)
+
+    def test_template_is_refused_before_its_time(self):
+        import datetime as dt
+        from apps.library.event_templates import BY_NAME, sendable_on
+
+        early = BY_NAME["event_teaser"]["send_from"] - dt.timedelta(days=5)
+        allowed, reason = sendable_on("event_teaser", early)
+        self.assertFalse(allowed)
+        self.assertIn("not due to go out", reason)
+
+    def test_templates_outside_the_campaign_are_unaffected(self):
+        from apps.library.event_templates import sendable_on
+
+        self.assertEqual(sendable_on("claim_status_update"), (True, ""))
+
+
+class DateIsNotBakedIntoCopyTests(TestCase):
+    """Moving the event must not mean ten template edits and ten re-reviews."""
+
+    def test_no_template_body_contains_a_month_name(self):
+        import re
+        from apps.library.event_templates import TEMPLATES
+
+        months = re.compile(
+            r"January|February|March|April|May|June|July|August|September|October|"
+            r"November|December"
+        )
+        for definition in TEMPLATES:
+            for component in definition["components"]:
+                if component["type"] == "BODY":
+                    self.assertIsNone(
+                        months.search(component["text"]),
+                        f"{definition['name']} has a date written into approved copy; "
+                        "pass it as a variable instead",
+                    )
+
+    def test_every_body_variable_has_a_sample(self):
+        import re
+        from apps.library.event_templates import TEMPLATES
+
+        for definition in TEMPLATES:
+            for component in definition["components"]:
+                if component["type"] != "BODY":
+                    continue
+                count = len(set(re.findall(r"\{\{(\d+)\}\}", component["text"])))
+                samples = component.get("example", {}).get("body_text", [[]])[0]
+                self.assertEqual(
+                    count, len(samples), f"{definition['name']}: {count} variables, "
+                    f"{len(samples)} samples - Meta rejects that"
+                )
+
+    def test_every_template_offers_a_route_to_a_person(self):
+        from apps.library.event_templates import HUMAN_FOOTER, TEMPLATES
+
+        for definition in TEMPLATES:
+            footers = [c for c in definition["components"] if c["type"] == "FOOTER"]
+            self.assertTrue(footers, f"{definition['name']} has no footer")
+            self.assertEqual(footers[0]["text"], HUMAN_FOOTER)
+
+    def test_windows_move_with_the_event_date(self):
+        from apps.library.event_templates import BY_NAME, EVENT_DATE
+
+        self.assertEqual(BY_NAME["event_morning"]["send_from"], EVENT_DATE)
+        self.assertLess(BY_NAME["event_invite"]["send_until"], EVENT_DATE)

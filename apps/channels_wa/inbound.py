@@ -145,6 +145,27 @@ def _store_message(channel, payload, profiles):
         auto_assign(conversation)
         _maybe_send_out_of_hours(conversation)
 
+    # STOP outranks everything, including a request for a person: someone who
+    # has asked to be left alone is not helped by being put in a queue.
+    if _wants_to_stop(message.body):
+        _opt_out(conversation, message)
+    elif _wants_to_resume(message.body) and conversation.contact.is_opted_out:
+        _opt_in(conversation, message)
+    # Always honoured, whatever the automation is doing and whatever step the
+    # customer is on. This is the promise the footer on every template makes.
+    elif _wants_a_human(message.body):
+        _escalate_to_human(conversation, message)
+    else:
+        # The event journey gets first refusal on everything else. It claims
+        # tokens and RSVP answers and leaves anything it does not understand
+        # for a person, rather than guessing.
+        try:
+            from apps.events.journey import handle as handle_event
+
+            handle_event(conversation, message)
+        except Exception:
+            logger.exception("event journey failed conversation=%s", conversation.pk)
+
     events.conversation_changed(conversation, "message")
     return message
 
@@ -164,6 +185,181 @@ def _fetch_media(channel, message, payload, kind):
     message.media_mime = mime or ""
     message.media_filename = filename
     message.save(update_fields=["media", "media_mime", "media_filename"])
+
+
+def _wants_a_human(text):
+    """Does this message ask for a person?
+
+    Deliberately generous. Letting through someone who did not strictly need a
+    human costs a few seconds of an agent's time; failing to let through
+    someone who did costs a customer. Two ways to match: a short message that
+    is essentially just the word, or any message expressing the intent.
+    """
+    import re
+
+    from apps.library.event_templates import HUMAN_KEYWORDS
+
+    cleaned = " ".join((text or "").lower().split()).strip(" .!?")
+    if not cleaned:
+        return False
+    if cleaned in HUMAN_KEYWORDS:
+        return True
+
+    # "can I speak to someone", "talk to a person please", "chat to an agent"
+    intent = re.compile(
+        r"\b(speak|talk|chat|call)\b.{0,20}?\b(agent|human|person|someone|operator|consultant)\b"
+    )
+    if intent.search(cleaned):
+        return True
+
+    # A short message that is basically the keyword: "agent please", "need help"
+    if len(cleaned.split()) <= 4 and re.search(
+        r"\b(agent|human|operator|consultant|help)\b", cleaned
+    ):
+        return True
+    return False
+
+
+def _wants_to_stop(text):
+    """Has this person asked to be left alone?
+
+    Deliberately narrower than the request-a-human match. Opting someone out
+    by accident is a worse failure than missing it once, because the next
+    message they get is one they explicitly asked not to receive - and they
+    told a regulator's favourite word to a financial services provider.
+    """
+    import re
+
+    cleaned = " ".join((text or "").lower().split()).strip(" .!?")
+    if not cleaned:
+        return False
+    if cleaned in {"stop", "unsubscribe", "opt out", "optout", "remove me", "cancel messages"}:
+        return True
+    return bool(
+        re.search(r"\b(stop|unsubscribe|opt.?out)\b.{0,25}\b(messages?|sending|contacting|list)\b", cleaned)
+        or re.search(r"\b(remove|take) me off\b", cleaned)
+        or re.search(r"\bdo ?n[o']?t (message|contact|whatsapp) me\b", cleaned)
+    )
+
+
+def _wants_to_resume(text):
+    cleaned = " ".join((text or "").lower().split()).strip(" .!?")
+    return cleaned in {"start", "resume", "subscribe", "opt in", "optin"}
+
+
+def _opt_out(conversation, message):
+    """Honour STOP: record it, confirm it, and stop the automation."""
+    from apps.channels_wa.outbound import send_text
+
+    contact = conversation.contact
+    if not contact.is_opted_out:
+        contact.opted_out_at = timezone.now()
+        contact.save(update_fields=["opted_out_at"])
+
+    conversation.automation_state = {}
+    conversation.handoff_reason = "opted out"
+    conversation.save(update_fields=["automation_state", "handoff_reason"])
+
+    _stop_event_journey(conversation)
+
+    Message.objects.create(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.SYSTEM,
+        actor=Message.Actor.SYSTEM,
+        kind=Message.Kind.TEXT,
+        body="Customer replied STOP. No further templates will be sent to this contact.",
+        payload={"note": True, "escalation": "opted_out"},
+        wa_status=Message.Status.SENT,
+    )
+
+    # A reply is allowed and is the right thing to do: they messaged us, so the
+    # window is open, it costs nothing, and silence after STOP reads as a fault.
+    name = _first_name(conversation)
+    send_text(
+        conversation,
+        (f"{name}, you are off the list." if name else "You are off the list.")
+        + " You will not get any further messages from us on this number unless you "
+        "message us first.\n\n"
+        "If that was a mistake, reply START. If you would rather talk to someone, "
+        "reply AGENT.",
+        actor=Message.Actor.BOT,
+    )
+    logger.info("opted out conversation=%s", conversation.pk)
+
+
+def _opt_in(conversation, message):
+    from apps.channels_wa.outbound import send_text
+
+    contact = conversation.contact
+    contact.opted_out_at = None
+    contact.save(update_fields=["opted_out_at"])
+
+    Message.objects.create(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.SYSTEM,
+        actor=Message.Actor.SYSTEM,
+        kind=Message.Kind.TEXT,
+        body="Customer replied START. Messaging resumed.",
+        payload={"note": True, "escalation": "opted_in"},
+        wa_status=Message.Status.SENT,
+    )
+    name = _first_name(conversation)
+    send_text(
+        conversation,
+        (f"Welcome back, {name}." if name else "Welcome back.")
+        + " You are back on the list and I will pick up where we left off.",
+        actor=Message.Actor.BOT,
+    )
+    logger.info("opted back in conversation=%s", conversation.pk)
+
+
+def _stop_event_journey(conversation):
+    """Mark the guest opted out so no campaign picks them up again."""
+    try:
+        from apps.events.models import Guest
+
+        guest = (
+            Guest.objects.for_workspace(conversation.workspace)
+            .filter(contact=conversation.contact)
+            .first()
+        )
+        if guest is not None:
+            guest.advance(Guest.Stage.STOPPED, stopped_at=timezone.now())
+    except Exception:
+        logger.exception("could not stop event journey conversation=%s", conversation.pk)
+
+
+def _first_name(conversation):
+    name = (conversation.contact.display_name or "").split()
+    return name[0] if name else ""
+
+
+def _escalate_to_human(conversation, message):
+    """Take a conversation away from automation and put it in the queue."""
+    from apps.agents.allocation import auto_assign
+
+    conversation.status = Conversation.Status.QUEUED if not conversation.assigned_to_id else conversation.status
+    conversation.priority = max(conversation.priority, Conversation.Priority.HIGH)
+    conversation.handoff_reason = "asked for a person"
+    conversation.automation_state = {}
+    conversation.save(update_fields=["status", "priority", "handoff_reason", "automation_state"])
+
+    Message.objects.create(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.SYSTEM,
+        actor=Message.Actor.SYSTEM,
+        kind=Message.Kind.TEXT,
+        body="Customer asked to speak to a person. Automation has been switched off "
+        "for this chat.",
+        payload={"note": True, "escalation": "human_requested"},
+        wa_status=Message.Status.SENT,
+    )
+    if conversation.assigned_to_id is None:
+        auto_assign(conversation)
+    logger.info("human requested conversation=%s", conversation.pk)
 
 
 def _maybe_send_out_of_hours(conversation):
