@@ -203,8 +203,7 @@ def _send_calendar(conversation, guest):
     send_text(
         conversation,
         f"Here you go, {guest.first_name} - tap to add it to your diary:\n"
-        f"{ics.link_for(guest)}\n\n"
-        "It is also attached to the invitation email I sent you.",
+        f"{ics.link_for(guest)}",
         actor=Message.Actor.BOT,
     )
     JourneyEvent.objects.create(workspace=guest.workspace, guest=guest, step="calendar_sent")
