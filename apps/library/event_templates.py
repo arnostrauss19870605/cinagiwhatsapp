@@ -102,7 +102,7 @@ TEMPLATES = [
                 "Wednesday 30 September",
             ),
             footer(),
-            buttons("RSVP now", "Not this time", "Talk to a human"),
+            buttons("RSVP now", "Not this time", "Cinagi Consultant"),
         ],
     },
     {
@@ -140,7 +140,7 @@ TEMPLATES = [
                 "API integrations",
             ),
             footer(),
-            buttons("Ask about the agenda", "Talk to a human"),
+            buttons("Ask about the agenda", "Cinagi Consultant"),
         ],
     },
     {
@@ -159,7 +159,7 @@ TEMPLATES = [
                 "30 September",
             ),
             footer(),
-            buttons("Guess the announcement", "See the agenda", "Talk to a human"),
+            buttons("Guess the announcement", "See the agenda", "Cinagi Consultant"),
         ],
     },
     {
@@ -178,7 +178,7 @@ TEMPLATES = [
                 "Wednesday 30 September",
             ),
             footer(),
-            buttons("Add to calendar", "Send venue pin", "Talk to a human"),
+            buttons("Add to calendar", "Send venue pin", "Cinagi Consultant"),
         ],
     },
     {
@@ -206,7 +206,7 @@ TEMPLATES = [
                 "Wednesday 30 September",
             ),
             footer(),
-            buttons("Add to calendar", "Send venue pin", "Talk to a human"),
+            buttons("Add to calendar", "Send venue pin", "Cinagi Consultant"),
         ],
     },
     {
@@ -223,7 +223,7 @@ TEMPLATES = [
                 "Thabo",
             ),
             footer(),
-            buttons("I am still in", "Plans changed", "Talk to a human"),
+            buttons("I am still in", "Plans changed", "Cinagi Consultant"),
         ],
     },
     {
@@ -239,7 +239,7 @@ TEMPLATES = [
                 "Thabo",
             ),
             footer(),
-            buttons("Send venue pin", "Running late", "Talk to a human"),
+            buttons("Send venue pin", "Running late", "Cinagi Consultant"),
         ],
     },
     {
@@ -273,7 +273,7 @@ TEMPLATES = [
                 "Wednesday",
             ),
             footer(),
-            buttons("Book a demo", "Talk to my AM", "Talk to a human"),
+            buttons("Book a demo", "Talk to my AM", "Cinagi Consultant"),
         ],
     },
     {
@@ -289,7 +289,7 @@ TEMPLATES = [
                 "Thabo",
             ),
             footer(),
-            buttons("See available times", "Not right now", "Talk to a human"),
+            buttons("See available times", "Not right now", "Cinagi Consultant"),
         ],
     },
 ]
