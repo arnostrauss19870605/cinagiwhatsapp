@@ -189,12 +189,10 @@ TEMPLATES = [
         # The copy reads like a booking receipt, not an invitation - Meta's
         # category checker rejected a first version naming the launch as
         # INCORRECT_CATEGORY, because promoting the event is MARKETING.
-        # Deliberately NOT named event_rsvp_* like its predecessors: Meta allows
-        # one edit per 24 hours on an active template, and a fresh submission
-        # under a name with no history reviews fastest. Earlier iterations
-        # (event_rsvp_received, event_registration_received,
-        # event_rsvp_received_v2) can be deleted in WhatsApp Manager.
-        "name": "booking_confirmation",
+        # _v2 exists because Meta allows one edit per 24 hours on an active
+        # template and the day's edit was spent; a fresh name reviews as a new
+        # template. v1 (time baked as 08h30) can be deleted in WhatsApp Manager.
+        "name": "event_rsvp_received_v2",
         "category": "UTILITY",
         "send_from": dt.date(2026, 8, 25),
         "send_until": EVENT_DATE,
