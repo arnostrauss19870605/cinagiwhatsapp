@@ -155,6 +155,11 @@ class Guest(WorkspaceScopedModel, TimeStampedModel):
     company = models.CharField(max_length=120, blank=True)
     email = models.EmailField(blank=True)
     msisdn = models.CharField(max_length=32, blank=True, help_text="International form, no plus.")
+    # Encrypted at rest: an ID number is POPIA-sensitive personal information,
+    # held only for venue access on the day.
+    id_number = EncryptedTextField(
+        blank=True, default="", help_text="ID or passport number, for venue access."
+    )
     segment = models.CharField(max_length=20, choices=Segment.choices, default=Segment.BROKER)
 
     invite_token = models.CharField(max_length=32, default=new_token, unique=True)

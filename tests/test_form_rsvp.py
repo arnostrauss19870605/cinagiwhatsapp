@@ -206,6 +206,33 @@ class FormRsvpTests(TestCase):
         self.assertEqual(guest.first_name, "Thabo")
         self.assertEqual(guest.last_name, "Mokoena")
 
+    # -- the ID number is sensitive ------------------------------------------
+
+    def test_an_id_or_passport_number_is_accepted_under_any_common_key(self):
+        for key in ("ID Number", "id_number", "Passport Number", "ID / Passport"):
+            self._post({"first_name": "Thabo", "mobile": "0726124698", key: "8701015800084"})
+            guest = Guest.objects.get(event=self.event, msisdn="27726124698")
+            self.assertEqual(guest.id_number, "8701015800084", key)
+            guest.id_number = ""
+            guest.save(update_fields=["id_number"])
+
+    def test_the_id_number_is_encrypted_at_rest(self):
+        from django.db import connection
+
+        self._post({"first_name": "Thabo", "mobile": "0726124698", "id_number": "8701015800084"})
+        guest = Guest.objects.get(event=self.event, msisdn="27726124698")
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id_number FROM events_guest WHERE id = %s", [guest.pk])
+            stored = cursor.fetchone()[0]
+        self.assertNotIn("8701015800084", stored)
+        self.assertTrue(stored.startswith("enc:"))
+
+    def test_the_id_number_never_lands_in_the_journey_payload(self):
+        self._post({"first_name": "Thabo", "mobile": "0726124698", "id_number": "8701015800084"})
+        guest = Guest.objects.get(event=self.event, msisdn="27726124698")
+        registered = guest.journey.get(step="form_registered")
+        self.assertNotIn("8701015800084", str(registered.payload))
+
 
 @override_settings(OUTBOUND_COMMS_MODE="live")
 class RsvpConfirmationTests(TestCase):

@@ -60,6 +60,9 @@ FIELD_ALIASES = {
     "dietary": {"dietary", "diet", "dietaryrequirements", "dietaryneeds"},
     "attendance": {"attending", "attendance", "rsvp", "response",
                    "willyouattend", "areyouattending", "willyoubeattending"},
+    "id_number": {"idnumber", "id", "idpassport", "idpassportnumber",
+                  "idorpassport", "idorpassportnumber", "passport",
+                  "passportnumber", "identitynumber"},
     "full_name": {"name", "fullname"},
 }
 
@@ -169,7 +172,7 @@ def form_rsvp(request, event_id):
 
     details = {
         key: fields[key]
-        for key in ("first_name", "last_name", "company", "email", "msisdn", "dietary")
+        for key in ("first_name", "last_name", "company", "email", "msisdn", "dietary", "id_number")
         if fields.get(key)
     }
     created = guest is None
@@ -180,8 +183,14 @@ def form_rsvp(request, event_id):
             setattr(guest, key, value)
         guest.save(update_fields=list(details))
 
+    # The journey keeps the raw submission for debugging field mappings, but
+    # the ID number lives only in the guest's encrypted field - a plaintext
+    # copy in a JSON column would defeat the encryption.
     JourneyEvent.objects.create(
-        workspace=event.workspace, guest=guest, step="form_registered", payload=fields
+        workspace=event.workspace,
+        guest=guest,
+        step="form_registered",
+        payload={key: value for key, value in fields.items() if key != "id_number"},
     )
 
     if not event.rsvp_open:
