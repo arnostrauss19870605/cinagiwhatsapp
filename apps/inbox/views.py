@@ -61,6 +61,8 @@ def inbox(request, pk=None):
             conversation.unread_agent_count = 0
             conversation.save(update_fields=["unread_agent_count"])
 
+    from apps.contacts.models import Audience
+
     context = {
         "conversations": conversations,
         "conversation": conversation,
@@ -69,6 +71,7 @@ def inbox(request, pk=None):
         "filters": FILTERS,
         "reply_form": ReplyForm(),
         "note_form": NoteForm(),
+        "audiences": Audience.objects.for_request(request),
         "snippets": _snippets(request)[:8],
         "templates": MessageTemplate.objects.for_request(request).filter(
             status=MessageTemplate.Status.APPROVED
@@ -98,11 +101,18 @@ def _snippets(request, query=""):
 @login_required
 def thread(request, pk):
     """The conversation pane on its own - what the websocket ping makes us refetch."""
+    from apps.contacts.models import Audience
+
     conversation = scoped_get_or_404(Conversation, request, pk=pk)
     return render(
         request,
         "inbox/partials/thread.html",
-        {"conversation": conversation, "reply_form": ReplyForm(), "note_form": NoteForm()},
+        {
+            "conversation": conversation,
+            "reply_form": ReplyForm(),
+            "note_form": NoteForm(),
+            "audiences": Audience.objects.for_request(request),
+        },
     )
 
 

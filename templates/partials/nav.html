@@ -36,6 +36,7 @@
 
     <nav class="ml-2 hidden items-center gap-0.5 text-sm md:flex">
       <a href="{% url 'inbox:inbox' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Chats</a>
+      <a href="{% url 'contacts:contacts' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Contacts</a>
       <a href="{% url 'library:snippets' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Quick replies</a>
       <a href="{% url 'library:templates' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Templates</a>
       {% if membership.can_manage %}

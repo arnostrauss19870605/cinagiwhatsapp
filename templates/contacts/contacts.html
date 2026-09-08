@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Contacts{% endblock %}
+{% block content %}
+
+<div class="hero flex flex-wrap items-end justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">People</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Contacts</h1>
+    <p class="mt-2 max-w-2xl text-sm text-sky-100">
+      Everyone who has ever messaged this number, or been added to it.
+      Open someone to see the full history and which audiences they belong to.
+    </p>
+  </div>
+  <p class="num text-sm text-sky-100">{{ total }} total</p>
+</div>
+
+<form method="get" class="mt-6">
+  <div class="relative max-w-xl">
+    <input name="q" value="{{ query }}" placeholder="Search by name or number…"
+           class="w-full rounded-2xl border-slate-300 py-3 pl-4 pr-24 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+    <button class="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-[#0065A9] px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-[#005490]">
+      Search
+    </button>
+  </div>
+</form>
+
+<div class="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <tr>
+        <th class="px-6 py-3.5">Name</th>
+        <th class="px-6 py-3.5">Number</th>
+        <th class="px-6 py-3.5">Audiences</th>
+        <th class="px-6 py-3.5">Last seen</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for contact in contacts %}
+        <tr class="transition hover:bg-slate-50/70">
+          <td class="px-6 py-3.5">
+            <a href="{% url 'contacts:contact_detail' contact.pk %}" class="flex items-center gap-3">
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-slate-200 text-xs font-semibold text-slate-600">{{ contact.initials }}</span>
+              <span class="font-medium text-[#0065A9] hover:underline">{{ contact.name }}</span>
+              {% if contact.is_opted_out %}<span class="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-700">opted out</span>{% endif %}
+            </a>
+          </td>
+          <td class="num px-6 py-3.5 text-xs text-slate-500">{{ contact.pretty_number }}</td>
+          <td class="px-6 py-3.5">
+            <div class="flex flex-wrap gap-1.5">
+              {% for audience in contact.audiences.all %}
+                <span class="rounded-full bg-[#76BD4C]/15 px-2 py-0.5 text-[11px] font-medium text-[#3d7a1e]">{{ audience.name }}</span>
+              {% empty %}<span class="text-xs text-slate-400">–</span>{% endfor %}
+            </div>
+          </td>
+          <td class="px-6 py-3.5 text-xs text-slate-500">{{ contact.last_seen_at|date:"j M Y H:i"|default:"never messaged" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="px-6 py-14 text-center text-slate-500">
+          {% if query %}
+            <p class="text-base font-medium text-slate-700">Nobody found for "{{ query }}"</p>
+            <p class="mt-1 text-sm">Try part of a name, or the number in any form.</p>
+          {% else %}
+            <p class="text-base font-medium text-slate-700">No contacts yet</p>
+            <p class="mt-1 text-sm">People appear here the moment they message your number.</p>
+          {% endif %}
+        </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if contacts|length == 200 %}
+    <p class="border-t border-slate-100 px-6 py-3 text-xs text-slate-500">Showing the first 200 - narrow the search to see the rest.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

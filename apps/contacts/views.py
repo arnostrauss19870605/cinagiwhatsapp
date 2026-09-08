@@ -1,12 +1,16 @@
-"""Audience management: named groups of contacts for bulk sends."""
+"""Contacts, their full history, and audience management."""
 
 import csv
 import io
+import json
 
 from django.contrib import messages as flash
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
+from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
 from apps.core.audit import audit
@@ -14,6 +18,139 @@ from apps.core.scoping import require_role, scoped_get_or_404
 from apps.workspaces.models import WorkspaceMembership
 
 from .models import Audience, Contact, normalise_msisdn
+
+
+@login_required
+def contacts(request):
+    """Everyone we have ever spoken to, searchable by name or number."""
+    if request.workspace is None:
+        return redirect("workspaces:list")
+    query = (request.GET.get("q") or "").strip()
+    found = Contact.objects.for_request(request).prefetch_related("audiences")
+    if query:
+        found = found.filter(
+            Q(display_name__icontains=query)
+            | Q(profile_name__icontains=query)
+            | Q(wa_id__icontains=normalise_msisdn(query) or query)
+        )
+    return render(
+        request,
+        "contacts/contacts.html",
+        {"contacts": found[:200], "query": query,
+         "total": Contact.objects.for_request(request).count()},
+    )
+
+
+def _history(request, contact):
+    from apps.inbox.models import Message
+
+    return (
+        Message.objects.for_request(request)
+        .filter(conversation__contact=contact)
+        .select_related("author", "template")
+        .order_by("created_at")
+    )
+
+
+@login_required
+def contact_detail(request, pk):
+    if request.workspace is None:
+        return redirect("workspaces:list")
+    contact = scoped_get_or_404(Contact, request, pk=pk)
+    return render(
+        request,
+        "contacts/contact_detail.html",
+        {
+            "contact": contact,
+            "history": _history(request, contact),
+            "audiences": Audience.objects.for_request(request),
+            "member_of": set(contact.audiences.values_list("pk", flat=True)),
+            "can_export": request.membership.can_supervise,
+            "conversations": contact.conversations.order_by("-last_activity_at"),
+        },
+    )
+
+
+@login_required
+@require_POST
+def contact_audiences(request, pk):
+    """Set which audiences this person belongs to - from the chat or their page."""
+    contact = scoped_get_or_404(Contact, request, pk=pk)
+    chosen = Audience.objects.for_request(request).filter(
+        pk__in=request.POST.getlist("audiences")
+    )
+    contact.audiences.set(chosen)
+    audit(
+        "contact.audiences_set", request=request, target=contact,
+        audiences=[a.name for a in chosen],
+    )
+    flash.success(request, f"{contact.name} is now in {len(chosen)} audience{'s' if len(chosen) != 1 else ''}.")
+    next_url = request.POST.get("next", "")
+    if next_url.startswith("/"):
+        return redirect(next_url)
+    return redirect("contacts:contact_detail", pk=contact.pk)
+
+
+def _export_rows(history):
+    for message in history:
+        yield {
+            "at": timezone.localtime(message.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+            "direction": "in" if message.is_inbound else "out",
+            "from": "customer" if message.is_inbound else (
+                message.author.display_name if message.author_id else message.get_actor_display()
+            ),
+            "kind": "internal note" if message.payload.get("note") else message.kind,
+            "status": "" if message.is_inbound else message.wa_status,
+            "body": message.body or (message.media_filename and f"[{message.media_filename}]") or "",
+        }
+
+
+@login_required
+def contact_export(request, pk, fmt):
+    """The whole conversation history as a file. Supervisors and up only -
+    exporting a customer's chat is data leaving the platform, so it is
+    gated and every export is audited."""
+    contact = scoped_get_or_404(Contact, request, pk=pk)
+    require_role(request, *WorkspaceMembership.SUPERVISE_ROLES)
+
+    history = list(_history(request, contact))
+    stem = slugify(contact.name) or contact.wa_id
+    audit("contact.exported", request=request, target=contact, fmt=fmt, messages=len(history))
+
+    if fmt == "json":
+        payload = {
+            "contact": {"name": contact.name, "number": contact.pretty_number},
+            "exported_at": timezone.localtime(timezone.now()).isoformat(),
+            "messages": list(_export_rows(history)),
+        }
+        response = HttpResponse(
+            json.dumps(payload, indent=2, ensure_ascii=False),
+            content_type="application/json; charset=utf-8",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{stem}-chat.json"'
+        return response
+
+    if fmt == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{stem}-chat.csv"'
+        writer = csv.DictWriter(
+            response, fieldnames=["at", "direction", "from", "kind", "status", "body"]
+        )
+        writer.writeheader()
+        for row in _export_rows(history):
+            writer.writerow(row)
+        return response
+
+    if fmt == "pdf":
+        from .exports import chat_pdf
+
+        response = HttpResponse(content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{stem}-chat.pdf"'
+        chat_pdf(response, request.workspace, contact, history, exported_by=request.user)
+        return response
+
+    flash.error(request, "That export format is not available.")
+    return redirect("contacts:contact_detail", pk=contact.pk)
 
 
 def _manager(request):
