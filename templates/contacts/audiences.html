@@ -2,8 +2,9 @@
 {% block title %}Audiences{% endblock %}
 {% block content %}
 
-<div class="overflow-hidden rounded-3xl bg-gradient-to-r from-[#0065A9] to-[#0080d6] p-8 text-white shadow-lg">
-  <h1 class="text-3xl font-semibold tracking-tight">Audiences</h1>
+<div class="hero rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
+  <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Broadcast groups</p>
+  <h1 class="mt-1 text-3xl font-semibold tracking-tight">Audiences</h1>
   <p class="mt-2 max-w-2xl text-sm text-sky-100">
     An audience is a named group of people you can message together - launch attendees,
     VIP brokers, the press list. One person can belong to as many as you like; a bulk
@@ -35,8 +36,8 @@
                 {% endif %}
               </td>
               <td class="px-6 py-4">
-                <span class="inline-flex items-center gap-1.5 rounded-full bg-[#76BD4C]/15 px-2.5 py-1 text-xs font-semibold text-[#3d7a1e]">
-                  {{ audience.member_count }} member{{ audience.member_count|pluralize }}
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-[#76BD4C]/15 px-2.5 py-1 text-xs text-[#3d7a1e]">
+                  <span class="num">{{ audience.member_count }}</span> member{{ audience.member_count|pluralize }}
                 </span>
               </td>
               <td class="px-6 py-4 text-right">

@@ -12,8 +12,8 @@
   <div>
     <h1 class="text-2xl font-semibold tracking-tight text-slate-900">{{ audience.name }}</h1>
     {% if audience.description %}<p class="mt-1 text-sm text-slate-500">{{ audience.description }}</p>{% endif %}
-    <span class="mt-2 inline-flex items-center rounded-full bg-[#76BD4C]/15 px-2.5 py-1 text-xs font-semibold text-[#3d7a1e]">
-      {{ members|length }} member{{ members|length|pluralize }}
+    <span class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#76BD4C]/15 px-2.5 py-1 text-xs text-[#3d7a1e]">
+      <span class="num">{{ members|length }}</span> member{{ members|length|pluralize }}
     </span>
   </div>
   <div class="flex gap-2">

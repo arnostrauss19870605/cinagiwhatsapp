@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Approved templates{% endblock %}
 {% block content %}
-<div class="flex items-center justify-between">
+<div class="hero flex flex-wrap items-center justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
   <div>
-    <h1 class="text-2xl font-semibold">Approved templates</h1>
-    <p class="max-w-2xl text-sm text-slate-500">
+    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Message library</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Approved templates</h1>
+    <p class="mt-2 max-w-2xl text-sm text-sky-100">
       These come from WhatsApp Manager - you write and submit them there, and Meta approves them.
       You need one of these to message a customer who has not written to you in the last 24 hours.
     </p>
@@ -12,7 +13,8 @@
   {% if membership.can_manage %}
     <div class="flex gap-2">
       {% for channel in channels %}
-        <a href="{% url 'channels_wa:sync_templates' channel.pk %}" class="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50">
+        <a href="{% url 'channels_wa:sync_templates' channel.pk %}"
+           class="rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">
           Refresh from WhatsApp
         </a>
       {% endfor %}
@@ -20,21 +22,21 @@
   {% endif %}
 </div>
 
-<div class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+<div class="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
   <table class="w-full text-sm">
-    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-      <tr><th class="px-5 py-3">Name</th><th class="px-5 py-3">Language</th><th class="px-5 py-3">Type</th>
-          <th class="px-5 py-3">Status</th><th class="px-5 py-3">Message</th></tr>
+    <thead class="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+      <tr><th class="px-5 py-3.5">Name</th><th class="px-5 py-3.5">Language</th><th class="px-5 py-3.5">Type</th>
+          <th class="px-5 py-3.5">Status</th><th class="px-5 py-3.5">Message</th></tr>
     </thead>
     <tbody class="divide-y divide-slate-100">
       {% for t in templates %}
-        <tr>
-          <td class="px-5 py-3 font-medium">{{ t.name }}</td>
-          <td class="px-5 py-3">{{ t.language }}</td>
+        <tr class="transition hover:bg-slate-50/70">
+          <td class="px-5 py-3 font-medium text-slate-800">{{ t.name }}</td>
+          <td class="num px-5 py-3 text-xs text-slate-500">{{ t.language }}</td>
           <td class="px-5 py-3">{{ t.get_category_display }}</td>
           <td class="px-5 py-3">
-            <span class="rounded-full px-2 py-0.5 text-xs
-              {% if t.status == 'APPROVED' %}bg-emerald-100 text-emerald-800
+            <span class="rounded-full px-2.5 py-1 text-xs font-semibold
+              {% if t.status == 'APPROVED' %}bg-[#76BD4C]/15 text-[#3d7a1e]
               {% elif t.status == 'REJECTED' %}bg-rose-100 text-rose-800
               {% else %}bg-slate-100 text-slate-600{% endif %}">{{ t.get_status_display }}</span>
           </td>
