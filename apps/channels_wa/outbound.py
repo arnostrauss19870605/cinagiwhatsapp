@@ -67,7 +67,7 @@ def send_location(conversation, latitude, longitude, *, name="", address="", aut
     return _finish(conversation, message, result)
 
 
-def send_template(conversation, template, values, *, author=None, actor=Message.Actor.AGENT):
+def send_template(conversation, template, values, *, header_media=None, author=None, actor=Message.Actor.AGENT):
     # An invitation to an event that has already happened is worse than no
     # invitation, so the campaign window is enforced here rather than trusted
     # to whoever is clicking send.
@@ -79,9 +79,11 @@ def send_template(conversation, template, values, *, author=None, actor=Message.
     allowed, reason = True, ""
     if conversation.contact.is_opted_out:
         allowed = False
+        # %-d is glibc-only; day formatted portably so Windows dev boxes agree.
+        opted = conversation.contact.opted_out_at
         reason = (
             f"{conversation.contact.name} opted out on "
-            f"{conversation.contact.opted_out_at:%-d %B %Y}. Templates are not sent to "
+            f"{opted.day} {opted:%B %Y}. Templates are not sent to "
             "contacts who have replied STOP."
         )
     else:
@@ -101,7 +103,7 @@ def send_template(conversation, template, values, *, author=None, actor=Message.
         )
         return _finish(conversation, message, SendResult(ok=False, blocked_reason=reason))
 
-    components = template.build_components(values)
+    components = template.build_components(values, header_media=header_media)
     message = Message(
         workspace=conversation.workspace,
         conversation=conversation,
@@ -111,7 +113,12 @@ def send_template(conversation, template, values, *, author=None, actor=Message.
         kind=Message.Kind.TEMPLATE,
         body=template.preview(values),
         template=template,
-        payload={"template": template.name, "language": template.language, "values": list(values)},
+        payload={
+            "template": template.name,
+            "language": template.language,
+            "values": list(values),
+            **({"header_media": header_media} if header_media else {}),
+        },
     )
     result = conversation.channel.client().send_template(
         conversation.contact.wa_id, template.name, template.language, components

@@ -75,6 +75,14 @@ class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
     def variable_count(self):
         return len(set(re.findall(r"\{\{(\d+)\}\}", self.body_text)))
 
+    @property
+    def header_format(self):
+        """'IMAGE', 'DOCUMENT', 'VIDEO', 'TEXT' or '' - what the header needs."""
+        for component in self.components or []:
+            if component.get("type", "").upper() == "HEADER":
+                return component.get("format", "TEXT").upper()
+        return ""
+
     def preview(self, values=None):
         """Render the template body with the supplied values, for the UI."""
         values = values or []
@@ -83,17 +91,35 @@ class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
             text = text.replace("{{%d}}" % index, str(value))
         return text
 
-    def build_components(self, values):
-        """Turn a flat list of values into the Graph API components payload."""
+    def build_components(self, values, header_media=None):
+        """Turn a flat list of values into the Graph API components payload.
+
+        A template with a media header refuses to send unless the header
+        parameter is supplied, so `header_media` is required for those:
+        {"link": url} or {"id": media_id}, plus "filename" for a document.
+        """
+        components = []
+        if header_media:
+            kind = self.header_format.lower() or "document"
+            media = {}
+            if header_media.get("id"):
+                media["id"] = header_media["id"]
+            elif header_media.get("link"):
+                media["link"] = header_media["link"]
+            if kind == "document" and header_media.get("filename"):
+                media["filename"] = header_media["filename"]
+            components.append(
+                {"type": "header", "parameters": [{"type": kind, kind: media}]}
+            )
         values = [v for v in values]
-        if not values:
-            return []
-        return [
-            {
-                "type": "body",
-                "parameters": [{"type": "text", "text": str(v)} for v in values],
-            }
-        ]
+        if values:
+            components.append(
+                {
+                    "type": "body",
+                    "parameters": [{"type": "text", "text": str(v)} for v in values],
+                }
+            )
+        return components
 
 
 class QuickSnippet(WorkspaceScopedModel, TimeStampedModel):

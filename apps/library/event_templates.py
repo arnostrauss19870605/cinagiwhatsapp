@@ -163,6 +163,27 @@ TEMPLATES = [
         ],
     },
     {
+        # The agenda as a PDF the guest can keep. Business-initiated, so it
+        # rides the same rules as the rest of the drip: MARKETING category,
+        # frequency-capped, batched.
+        "name": "event_agenda",
+        "category": "MARKETING",
+        "send_from": dt.date(2026, 9, 2),
+        "send_until": EVENT_DATE - dt.timedelta(days=1),
+        "components": [
+            document_header(),
+            body(
+                "Hi {{1}}, here is the full agenda for {{2}} - every session, "
+                "time and speaker in the document above.\n\n"
+                "Ask me anything about the day.",
+                "Thabo",
+                "Wednesday 30 September",
+            ),
+            footer(),
+            buttons("Ask about the agenda", "Cinagi Consultant"),
+        ],
+    },
+    {
         "name": "event_rsvp_confirmed",
         "category": "UTILITY",
         "send_from": dt.date(2026, 8, 25),
@@ -314,12 +335,12 @@ def sendable_on(name, on=None):
     starts, ends = definition.get("send_from"), definition.get("send_until")
     if starts and on < starts:
         return False, (
-            f"'{name}' is not due to go out until {starts:%-d %B %Y}. Sending it early "
-            "would spoil the sequence."
+            f"'{name}' is not due to go out until {starts.day} {starts:%B %Y}. "
+            "Sending it early would spoil the sequence."
         )
     if ends and on > ends:
         return False, (
-            f"'{name}' was for the event on {EVENT_DATE:%-d %B %Y} and stopped being "
-            f"sendable after {ends:%-d %B %Y}."
+            f"'{name}' was for the event on {EVENT_DATE.day} {EVENT_DATE:%B %Y} and "
+            f"stopped being sendable after {ends.day} {ends:%B %Y}."
         )
     return True, ""

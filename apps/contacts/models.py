@@ -54,6 +54,28 @@ class Contact(WorkspaceScopedModel, TimeStampedModel):
         return self.opted_out_at is not None
 
 
+class Audience(WorkspaceScopedModel, TimeStampedModel):
+    """A named group of contacts for bulk template sends.
+
+    A contact can belong to any number of audiences - "Launch attendees" and
+    "VIP brokers" overlap, and that is fine: the bulk sender de-duplicates, so
+    belonging twice never means receiving twice.
+    """
+
+    name = models.CharField(max_length=120)
+    description = models.CharField(max_length=255, blank=True)
+    contacts = models.ManyToManyField(Contact, related_name="audiences", blank=True)
+
+    class Meta:
+        ordering = ("name",)
+        constraints = [
+            models.UniqueConstraint(fields=["workspace", "name"], name="uniq_audience_per_workspace")
+        ]
+
+    def __str__(self):
+        return self.name
+
+
 class ContactExternalRef(TimeStampedModel):
     """Link a WhatsApp contact to a record in another system.
 
