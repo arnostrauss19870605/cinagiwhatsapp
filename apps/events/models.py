@@ -11,21 +11,10 @@ import secrets
 from django.db import models
 from django.utils import timezone
 
+from apps.contacts.models import normalise_msisdn  # noqa: F401 - shared number normaliser
 from apps.core.fields import EncryptedTextField
 from apps.core.models import TimeStampedModel
 from apps.core.scoping import WorkspaceScopedModel
-
-
-def normalise_msisdn(raw):
-    """International form, no plus. Local 0-prefixed numbers are read as South African."""
-    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
-    if not digits:
-        return ""
-    if digits.startswith("0"):
-        digits = "27" + digits[1:]
-    if digits.startswith("27") is False and len(digits) == 9:
-        digits = "27" + digits
-    return digits
 
 
 def new_token():

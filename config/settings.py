@@ -186,6 +186,7 @@ CELERY_TASK_ROUTES = {
     "apps.channels_wa.tasks.send_message": {"queue": "outbound"},
     "apps.channels_wa.tasks.sync_templates": {"queue": "default"},
     "apps.events.tasks.send_rsvp_confirmation": {"queue": "outbound"},
+    "apps.library.tasks.run_bulk_send": {"queue": "outbound"},
     "apps.ai.*": {"queue": "ai"},
 }
 

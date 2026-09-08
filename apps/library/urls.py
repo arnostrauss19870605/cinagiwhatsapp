@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("templates/", views.templates, name="templates"),
+    path("bulk-send/", views.bulk_send, name="bulk_send"),
     path("replies/", views.snippets, name="snippets"),
     path("replies/new/", views.snippet_edit, name="snippet_create"),
     path("replies/<int:pk>/", views.snippet_edit, name="snippet_edit"),

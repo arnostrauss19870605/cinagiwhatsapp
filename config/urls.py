@@ -14,6 +14,7 @@ urlpatterns = [
         "workspaces/",
         include(("apps.workspaces.urls", "workspaces"), namespace="workspaces"),
     ),
+    path("contacts/", include(("apps.contacts.urls", "contacts"), namespace="contacts")),
     path("inbox/", include(("apps.inbox.urls", "inbox"), namespace="inbox")),
     path("library/", include(("apps.library.urls", "library"), namespace="library")),
     path("agents/", include(("apps.agents.urls", "agents"), namespace="agents")),

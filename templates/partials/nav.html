@@ -1,4 +1,4 @@
-<header class="sticky top-0 z-30 border-b border-slate-200 bg-white">
+<header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur">
   <div class="mx-auto flex max-w-full items-center gap-3 px-4 py-2">
 
     <a href="{% url 'core:dashboard' %}" class="flex items-center gap-2 font-semibold text-slate-900">
@@ -39,6 +39,8 @@
       <a href="{% url 'library:snippets' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Quick replies</a>
       <a href="{% url 'library:templates' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Templates</a>
       {% if membership.can_manage %}
+        <a href="{% url 'contacts:audiences' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Audiences</a>
+        <a href="{% url 'library:bulk_send' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Bulk send</a>
         <a href="{% url 'channels_wa:list' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Numbers</a>
         <a href="{% url 'workspaces:hours' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Hours</a>
         <a href="{% url 'workspaces:team' %}" class="rounded-lg px-3 py-1.5 hover:bg-slate-100">Team</a>

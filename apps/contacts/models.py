@@ -4,6 +4,18 @@ from apps.core.models import TimeStampedModel
 from apps.core.scoping import WorkspaceScopedModel
 
 
+def normalise_msisdn(raw):
+    """International form, no plus. Local 0-prefixed numbers are read as South African."""
+    digits = "".join(ch for ch in str(raw or "") if ch.isdigit())
+    if not digits:
+        return ""
+    if digits.startswith("0"):
+        digits = "27" + digits[1:]
+    if digits.startswith("27") is False and len(digits) == 9:
+        digits = "27" + digits
+    return digits
+
+
 class Contact(WorkspaceScopedModel, TimeStampedModel):
     """A person messaging one workspace's number.
 

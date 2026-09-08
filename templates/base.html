@@ -14,9 +14,10 @@
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
   <style>
     [x-cloak]{display:none!important}
-    .accent{background-color:{{ workspace.accent_colour|default:"#0f766e" }}}
-    .accent-text{color:{{ workspace.accent_colour|default:"#0f766e" }}}
-    .accent-border{border-color:{{ workspace.accent_colour|default:"#0f766e" }}}
+    /* Cinagi brand: blue #0065A9, green #76BD4C - matches cinagi.co.za */
+    .accent{background-color:{{ workspace.accent_colour|default:"#0065A9" }}}
+    .accent-text{color:{{ workspace.accent_colour|default:"#0065A9" }}}
+    .accent-border{border-color:{{ workspace.accent_colour|default:"#0065A9" }}}
   </style>
 </head>
 <body class="h-full bg-slate-100 text-slate-800 antialiased">

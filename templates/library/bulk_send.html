@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Bulk send{% endblock %}
+{% block content %}
+
+<div class="overflow-hidden rounded-3xl bg-gradient-to-r from-[#0065A9] to-[#0080d6] p-8 text-white shadow-lg">
+  <h1 class="text-3xl font-semibold tracking-tight">Send to a group</h1>
+  <p class="mt-2 max-w-2xl text-sm text-sky-100">
+    Send an approved message to whole audiences at once. Sending happens in the background
+    and is spaced out, anyone who opted out is skipped automatically, and the audit log
+    records exactly what went where.
+  </p>
+</div>
+
+{% if not templates %}
+  <div class="mt-8 rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
+    <p class="text-base font-medium text-slate-700">No approved messages available</p>
+    <p class="mx-auto mt-1 max-w-md text-sm text-slate-500">
+      Bulk sends use approved templates. Once WhatsApp has approved one,
+      refresh the <a href="{% url 'library:templates' %}" class="text-[#0065A9] hover:underline">template list</a> and it appears here.
+    </p>
+  </div>
+{% else %}
+
+<form method="get" class="mt-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+  <label class="block text-sm font-semibold text-slate-900">1. Which message?</label>
+  <div class="mt-3 flex flex-wrap gap-3">
+    <select name="template" class="w-full max-w-md rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+      <option value="">Choose an approved message…</option>
+      {% for t in templates %}
+        <option value="{{ t.pk }}" {% if chosen and chosen.pk == t.pk %}selected{% endif %}>
+          {{ t.name }} ({{ t.get_category_display|lower }}{% if t.header_format == 'DOCUMENT' %}, with a PDF{% elif t.header_format == 'IMAGE' %}, with an image{% endif %})
+        </option>
+      {% endfor %}
+    </select>
+    <button class="rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium transition hover:bg-slate-50">Continue</button>
+  </div>
+  {% if chosen %}
+    <div class="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-600 ring-1 ring-slate-200/70">
+      <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Message preview</p>
+      {{ chosen.body_text|linebreaksbr }}
+    </div>
+  {% endif %}
+</form>
+
+{% if chosen %}
+<form method="post" enctype="multipart/form-data" class="mt-6 space-y-6">
+  {% csrf_token %}
+  <input type="hidden" name="template" value="{{ chosen.pk }}">
+
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <label class="block text-sm font-semibold text-slate-900">2. Fill in the message</label>
+    <p class="mt-1 text-xs text-slate-500">The first blank, {% templatetag openvariable %}1{% templatetag closevariable %}, becomes each person's first name automatically.</p>
+    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      {% for index in value_fields %}
+        <label class="block text-sm font-medium text-slate-700">
+          Value for {% templatetag openvariable %}{{ index }}{% templatetag closevariable %}
+          <input name="value_{{ index }}" required
+                 class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+        </label>
+      {% endfor %}
+      {% if not value_fields %}
+        <p class="text-sm text-slate-500 sm:col-span-2">This message has no blanks beyond the first name - nothing to fill in.</p>
+      {% endif %}
+    </div>
+
+    {% if chosen.header_format == 'DOCUMENT' or chosen.header_format == 'IMAGE' or chosen.header_format == 'VIDEO' %}
+      <div class="mt-6 border-t border-slate-100 pt-5">
+        <label class="block text-sm font-semibold text-slate-900">
+          Attach the {{ chosen.header_format|lower }}
+        </label>
+        <p class="mt-1 text-xs text-slate-500">Upload a file, or paste an https link to one already online. Everyone receives the same file.</p>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          <input type="file" name="media_file"
+                 class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0065A9]/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#0065A9] hover:file:bg-[#0065A9]/20">
+          <input type="url" name="media_url" placeholder="https://…"
+                 class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <label class="block text-sm font-semibold text-slate-900">3. Who gets it?</label>
+    <p class="mt-1 text-xs text-slate-500">Pick any combination - someone in several audiences is only messaged once.</p>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {% for audience in audiences %}
+        <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3.5 transition hover:border-[#0065A9]/50 hover:bg-[#0065A9]/5 has-[:checked]:border-[#0065A9] has-[:checked]:bg-[#0065A9]/5 has-[:checked]:ring-1 has-[:checked]:ring-[#0065A9]">
+          <input type="checkbox" name="audiences" value="{{ audience.pk }}"
+                 class="h-4 w-4 rounded border-slate-300 text-[#0065A9] focus:ring-[#0065A9]">
+          <span>
+            <span class="block text-sm font-medium text-slate-800">{{ audience.name }}</span>
+            <span class="block text-xs text-[#3d7a1e]">{{ audience.member_count }} member{{ audience.member_count|pluralize }}</span>
+          </span>
+        </label>
+      {% empty %}
+        <p class="text-sm text-slate-500 sm:col-span-3">
+          No audiences yet - <a href="{% url 'contacts:audiences' %}" class="text-[#0065A9] hover:underline">create one first</a>.
+        </p>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if audiences %}
+    <div class="flex items-center justify-end gap-4">
+      <p class="text-xs text-slate-500">Messages go out one at a time, in the background.</p>
+      <button class="rounded-xl bg-[#76BD4C] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#65a840]">
+        Start sending
+      </button>
+    </div>
+  {% endif %}
+</form>
+{% endif %}
+
+{% endif %}
+{% endblock %}

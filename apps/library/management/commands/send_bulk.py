@@ -14,7 +14,6 @@ messaged. Safe by default: --dry-run lists recipients, --limit caps a run, and
 --pause spaces the sends so a batch never looks like a burst.
 """
 
-import time
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -26,12 +25,6 @@ MEDIA_MIME = {
     ".jpeg": "image/jpeg",
     ".mp4": "video/mp4",
 }
-
-
-def first_name_of(contact):
-    name = (contact.display_name or contact.profile_name or "").strip()
-    first = name.split()[0] if name else ""
-    return first if first and first[0].isalpha() else "there"
 
 
 class Command(BaseCommand):
@@ -58,11 +51,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from apps.channels_wa.models import WhatsAppChannel
-        from apps.channels_wa.outbound import send_template
-        from apps.contacts.models import Audience, Contact
+        from apps.contacts.models import Audience
         from apps.core.audit import audit
-        from apps.inbox.models import Conversation, Message
+        from apps.library.bulk import audience_contacts, resolve_channel, send_to_contacts
         from apps.library.event_templates import sendable_on
         from apps.library.models import MessageTemplate
 
@@ -82,12 +73,7 @@ class Command(BaseCommand):
             raise CommandError("Those audiences belong to different workspaces.")
         workspace = audiences[0].workspace
 
-        channel = (
-            WhatsAppChannel.objects.for_workspace(workspace)
-            .filter(is_active=True)
-            .order_by("-is_default", "pk")
-            .first()
-        )
+        channel = resolve_channel(workspace)
         if channel is None:
             raise CommandError("No active WhatsApp number on this workspace.")
 
@@ -117,12 +103,7 @@ class Command(BaseCommand):
 
         header_media = self._resolve_media(template, channel, options)
 
-        contacts = (
-            Contact.objects.for_workspace(workspace)
-            .filter(audiences__in=audiences, is_blocked=False)
-            .distinct()
-            .order_by("pk")
-        )
+        contacts = audience_contacts(workspace, audiences)
         if options["limit"]:
             contacts = contacts[: options["limit"]]
         contacts = list(contacts)
@@ -139,52 +120,24 @@ class Command(BaseCommand):
             ))
             return
 
-        sent = blocked = failed = 0
-        for index, contact in enumerate(contacts):
-            if index:
-                time.sleep(options["pause"])
-            conversation = (
-                Conversation.objects.for_workspace(workspace)
-                .filter(contact=contact, status__in=Conversation.OPEN_STATUSES)
-                .order_by("-last_activity_at")
-                .first()
-            )
-            if conversation is None:
-                conversation = Conversation.objects.create(
-                    workspace=workspace,
-                    channel=channel,
-                    contact=contact,
-                    status=Conversation.Status.BOT,
-                )
-            message = send_template(
-                conversation,
-                template,
-                [first_name_of(contact), *options["value"]],
-                header_media=header_media,
-                actor=Message.Actor.BOT,
-            )
-            if message.wa_status == Message.Status.SENT:
-                sent += 1
-            elif message.wa_status == Message.Status.BLOCKED:
-                blocked += 1
-                self.stdout.write(f"  - {contact.name}: {message.wa_error.get('reason', 'blocked')}")
-            else:
-                failed += 1
-                self.stdout.write(self.style.ERROR(
-                    f"  x {contact.name}: {message.wa_error.get('reason', 'failed')}"
-                ))
-
+        result = send_to_contacts(
+            workspace, channel, template, contacts, options["value"],
+            header_media=header_media, pause=options["pause"],
+        )
+        for note in result["notes"]:
+            self.stdout.write(f"  - {note}")
         audit(
             "library.bulk_send",
             workspace=workspace,
             target=template,
             audiences=[a.name for a in audiences],
-            sent=sent,
-            blocked=blocked,
-            failed=failed,
+            sent=result["sent"],
+            blocked=result["blocked"],
+            failed=result["failed"],
         )
         self.stdout.write(self.style.SUCCESS(
-            f"Sent {sent}, blocked {blocked}, failed {failed} of {len(contacts)}."
+            f"Sent {result['sent']}, blocked {result['blocked']}, "
+            f"failed {result['failed']} of {len(contacts)}."
         ))
 
     def _resolve_media(self, template, channel, options):
