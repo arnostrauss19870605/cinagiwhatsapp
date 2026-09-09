@@ -34,8 +34,12 @@
   <!-- MIDDLE: the conversation -->
   <section class="flex min-w-0 flex-1 flex-col bg-slate-50" :class="pane === 'list' ? 'hidden md:flex' : 'flex'">
     {% if conversation %}
+      {# Only the messages and the header are swapped on a refresh. The composer is left
+         alone so a half-typed reply survives, and the poll covers a dropped websocket. #}
       <div id="thread" hx-get="{% url 'inbox:thread' conversation.pk %}"
-           hx-trigger="refresh-thread from:body" hx-swap="innerHTML" class="flex h-full flex-col">
+           hx-trigger="refresh-thread from:body, every 10s"
+           hx-select="#messages" hx-target="#messages" hx-swap="outerHTML"
+           hx-select-oob="#thread-header" class="flex h-full flex-col">
         {% include "inbox/partials/thread.html" %}
       </div>
     {% else %}
@@ -53,6 +57,24 @@
 </div>
 
 <script>
+  // Keep the newest message in view: on load, and after a refresh if the reader
+  // was already at the bottom. Someone scrolled up reading history is left there.
+  (function () {
+    function atBottom(el) { return el.scrollHeight - el.scrollTop - el.clientHeight < 80; }
+    function toBottom(el) { el.scrollTop = el.scrollHeight; }
+    var wasAtBottom = true;
+    document.body.addEventListener('htmx:beforeSwap', function (event) {
+      var el = document.getElementById('messages');
+      if (el && event.detail.target && event.detail.target.id === 'messages') { wasAtBottom = atBottom(el); }
+    });
+    document.body.addEventListener('htmx:afterSwap', function (event) {
+      var el = document.getElementById('messages');
+      if (el && event.detail.target && event.detail.target.id === 'messages' && wasAtBottom) { toBottom(el); }
+    });
+    var initial = document.getElementById('messages');
+    if (initial) { toBottom(initial); }
+  })();
+
   // Realtime: the server only tells us "something changed" - we refetch the
   // fragments. If the socket is unavailable the 8 second poll above covers us.
   (function () {

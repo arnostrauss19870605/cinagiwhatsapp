@@ -113,3 +113,13 @@ class ChatStatusTests(TestCase):
         with mock.patch(SEND_TEXT, return_value=SENT):
             self._reply(conversation)
         self.assertEqual((conversation.status, conversation.assigned_to), (Conversation.Status.ASSIGNED, self.agent))
+
+    def test_the_thread_fragment_carries_the_ids_the_live_refresh_swaps(self):
+        conversation = self._campaign_chat()
+        self.client.force_login(self.agent)
+        fragment = self.client.get(reverse("inbox:thread", args=[conversation.pk]))
+        self.assertContains(fragment, 'id="thread-header"')
+        self.assertContains(fragment, 'id="messages"')
+        page = self.client.get(reverse("inbox:conversation", args=[conversation.pk]))
+        self.assertContains(page, 'hx-select="#messages"')
+        self.assertContains(page, "every 10s")

@@ -1,5 +1,5 @@
 <!-- header -->
-<div class="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
+<div id="thread-header" class="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
   <a href="{% url 'inbox:inbox' %}" class="md:hidden rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">&larr;</a>
   <span class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold">{{ conversation.contact.initials }}</span>
   <div class="min-w-0 flex-1">
