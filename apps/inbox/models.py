@@ -75,6 +75,10 @@ class Conversation(WorkspaceScopedModel, TimeStampedModel):
         null=True, blank=True, help_text="When WhatsApp's 24 hour free-reply window closes."
     )
     unread_agent_count = models.PositiveIntegerField(default=0)
+    pending_alert_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the people on duty were last told this chat is waiting for a reply.",
+    )
 
     first_response_at = models.DateTimeField(null=True, blank=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
@@ -206,6 +210,9 @@ class Message(WorkspaceScopedModel):
     )
     snippet = models.ForeignKey(
         "library.QuickSnippet", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    bulk_send = models.ForeignKey(
+        "library.BulkSend", null=True, blank=True, on_delete=models.SET_NULL, related_name="messages"
     )
 
     wamid = models.CharField(max_length=128, blank=True, db_index=True)

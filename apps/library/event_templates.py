@@ -214,6 +214,25 @@ TEMPLATES = [
         ],
     },
     {
+        # Internal: goes to the phones in NOTIFICATION_NUMBERS, never to a
+        # customer, which is why it carries no footer or buttons and has no
+        # send window. A template because free text only reaches a phone
+        # that messaged the number in the last 24 hours; the people on duty
+        # usually have not. See apps/inbox/alerts.py.
+        "name": "consultant_alert",
+        "category": "UTILITY",
+        "internal": True,
+        "components": [
+            body(
+                "Cinagi inbox alert: {{1}}\n\n"
+                "Please open the inbox and reply to the customer.",
+                "Thabo Mokoena (+27726124698) asked to speak to a consultant on "
+                "Cinagi Broker Support. Open the inbox to reply: "
+                "https://brokers.cinagi.co.za/inbox/",
+            ),
+        ],
+    },
+    {
         "name": "event_rsvp_confirmed",
         "category": "UTILITY",
         "send_from": dt.date(2026, 8, 25),

@@ -149,7 +149,10 @@ class BulkSendUiTests(AudienceUiBase):
                 "template": self.template.pk,
                 "audiences": [self.audience.pk],
             })
-        self.assertRedirects(response, reverse("library:bulk_send"))
+        from apps.library.models import BulkSend
+
+        batch = BulkSend.objects.get()
+        self.assertRedirects(response, reverse("reporting:bulk_send", args=[batch.pk]))
         send.assert_called_once()
         message = Message.objects.get(kind=Message.Kind.TEMPLATE)
         self.assertEqual(message.payload["values"], ["Thabo"])

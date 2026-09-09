@@ -20,6 +20,7 @@ urlpatterns = [
     path("agents/", include(("apps.agents.urls", "agents"), namespace="agents")),
     path("wa/", include(("apps.channels_wa.urls", "channels_wa"), namespace="channels_wa")),
     path("e/", include(("apps.events.urls", "events"), namespace="events")),
+    path("analytics/", include(("apps.reporting.urls", "reporting"), namespace="reporting")),
 ]
 
 if settings.DEBUG:

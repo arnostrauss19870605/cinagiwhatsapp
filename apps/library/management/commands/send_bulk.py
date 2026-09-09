@@ -120,9 +120,15 @@ class Command(BaseCommand):
             ))
             return
 
+        from apps.library.bulk import start_bulk_send
+
+        batch = start_bulk_send(
+            workspace, channel, template, audiences, options["value"],
+            header_media=header_media, recipient_count=len(contacts),
+        )
         result = send_to_contacts(
             workspace, channel, template, contacts, options["value"],
-            header_media=header_media, pause=options["pause"],
+            header_media=header_media, pause=options["pause"], bulk_send=batch,
         )
         for note in result["notes"]:
             self.stdout.write(f"  - {note}")

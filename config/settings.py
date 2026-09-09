@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "apps.inbox",
     "apps.events",
     "apps.integrations",
+    "apps.reporting",
 ]
 
 MIDDLEWARE = [
@@ -185,6 +186,7 @@ CELERY_TASK_ROUTES = {
     "apps.channels_wa.tasks.process_inbound_payload": {"queue": "webhooks"},
     "apps.channels_wa.tasks.send_message": {"queue": "outbound"},
     "apps.channels_wa.tasks.sync_templates": {"queue": "default"},
+    "apps.channels_wa.tasks.alert_pending_chats": {"queue": "default"},
     "apps.events.tasks.send_rsvp_confirmation": {"queue": "outbound"},
     "apps.library.tasks.run_bulk_send": {"queue": "outbound"},
     "apps.ai.*": {"queue": "ai"},
@@ -222,6 +224,13 @@ WHATSAPP_TIMEOUT = int(env("WHATSAPP_TIMEOUT", "30"))
 # suppress | allowlist | live  - see apps/channels_wa/comms_guard.py
 OUTBOUND_COMMS_MODE = env("OUTBOUND_COMMS_MODE", "suppress" if DEBUG else "live")
 OUTBOUND_ALLOWLIST = env_list("OUTBOUND_ALLOWLIST")
+
+# Staff phones that get a WhatsApp alert when a customer asks for a consultant
+# or a chat has waited too long for a reply. Local South African numbers are
+# fine; see apps/inbox/alerts.py.
+NOTIFICATION_NUMBERS = env_list("NOTIFICATION_NUMBERS")
+NOTIFICATION_PENDING_MINUTES = int(env("NOTIFICATION_PENDING_MINUTES", "10"))
+NOTIFICATION_REPEAT_MINUTES = int(env("NOTIFICATION_REPEAT_MINUTES", "60"))
 
 # Encryption key for credentials held in the database.
 FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY") or base64.urlsafe_b64encode(

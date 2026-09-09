@@ -42,9 +42,37 @@ def audience_contacts(workspace, audiences):
     )
 
 
+def start_bulk_send(workspace, channel, template, audiences, values, *,
+                    header_media=None, created_by=None, created_by_id=None, recipient_count=0):
+    """Record a batch before the first message leaves, so a crash mid-run still shows."""
+    from apps.library.models import BulkSend
+
+    return BulkSend.objects.create(
+        workspace=workspace,
+        channel=channel,
+        template=template,
+        template_name=template.name,
+        audience_names=[a.name for a in audiences],
+        values=list(values),
+        header_media=header_media or {},
+        created_by_id=created_by.pk if created_by is not None else created_by_id,
+        recipient_count=recipient_count,
+    )
+
+
 def send_to_contacts(workspace, channel, template, contacts, values, *,
-                     header_media=None, pause=1.0):
+                     header_media=None, pause=1.0, bulk_send=None):
     """Send one template to each contact. Returns counts and per-contact notes."""
+    from django.utils import timezone
+
+    from apps.library.models import BulkSend
+
+    if bulk_send is not None:
+        bulk_send.status = BulkSend.Status.RUNNING
+        bulk_send.started_at = timezone.now()
+        bulk_send.recipient_count = len(contacts)
+        bulk_send.save(update_fields=["status", "started_at", "recipient_count"])
+
     sent = blocked = failed = 0
     notes = []
     for index, contact in enumerate(contacts):
@@ -70,6 +98,8 @@ def send_to_contacts(workspace, channel, template, contacts, values, *,
             header_media=header_media,
             actor=Message.Actor.BOT,
         )
+        if bulk_send is not None:
+            Message.objects.filter(pk=message.pk).update(bulk_send=bulk_send)
         if message.wa_status == Message.Status.SENT:
             sent += 1
         elif message.wa_status == Message.Status.BLOCKED:
@@ -78,4 +108,12 @@ def send_to_contacts(workspace, channel, template, contacts, values, *,
         else:
             failed += 1
             notes.append(f"{contact.name}: {message.wa_error.get('reason', 'failed')}")
+
+    if bulk_send is not None:
+        bulk_send.status = BulkSend.Status.DONE
+        bulk_send.finished_at = timezone.now()
+        bulk_send.sent_count, bulk_send.blocked_count, bulk_send.failed_count = sent, blocked, failed
+        bulk_send.save(
+            update_fields=["status", "finished_at", "sent_count", "blocked_count", "failed_count"]
+        )
     return {"sent": sent, "blocked": blocked, "failed": failed, "notes": notes}

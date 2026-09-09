@@ -361,6 +361,10 @@ def _escalate_to_human(conversation, message):
         auto_assign(conversation)
     logger.info("human requested conversation=%s", conversation.pk)
 
+    from apps.inbox.alerts import notify_consultant_requested
+
+    notify_consultant_requested(conversation)
+
 
 def _maybe_send_out_of_hours(conversation):
     workspace = conversation.workspace

@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+
+<div class="hero flex flex-wrap items-center justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Analytics</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">How your messages are doing</h1>
+    <p class="mt-2 max-w-2xl text-sm text-sky-100">
+      Every send, whether it arrived, whether it was read, and who wrote back. Delivery and read
+      figures keep updating as WhatsApp reports in, so a send from this morning will still be moving.
+    </p>
+  </div>
+  <div class="flex gap-1 rounded-xl bg-white/10 p-1 ring-1 ring-white/20">
+    {% for value, label in periods %}
+      <a href="?days={{ value }}" class="rounded-lg px-3 py-1.5 text-sm font-medium transition {% if value == days %}bg-white text-[#0065A9] shadow{% else %}text-white hover:bg-white/15{% endif %}">{{ label }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+{# -- Sending ------------------------------------------------------------- #}
+<h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Sending, last {{ days }} days</h2>
+<div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Messages sent</p>
+    <p class="num mt-2 text-3xl text-slate-900">{{ totals.sent }}</p>
+    <p class="mt-1 text-xs text-slate-500">Accepted by WhatsApp{% if totals.queued %}, {{ totals.queued }} still sending{% endif %}</p>
+  </div>
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Delivered</p>
+    <p class="num mt-2 text-3xl text-slate-900">{{ totals.delivered_pct }}<span class="text-lg text-slate-400">%</span></p>
+    <p class="mt-1 text-xs text-slate-500">{{ totals.delivered }} reached a phone</p>
+  </div>
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Read</p>
+    <p class="num mt-2 text-3xl text-slate-900">{{ totals.read_pct }}<span class="text-lg text-slate-400">%</span></p>
+    <p class="mt-1 text-xs text-slate-500">{{ totals.read }} opened, {{ totals.replied }} replied</p>
+  </div>
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Not delivered</p>
+    <p class="num mt-2 text-3xl {% if totals.failed %}text-rose-600{% else %}text-slate-900{% endif %}">{{ totals.failed }}</p>
+    <p class="mt-1 text-xs text-slate-500">{{ totals.failed_pct }}% of everything sent{% if totals.blocked %}, plus {{ totals.blocked }} held back in test mode{% endif %}</p>
+  </div>
+</div>
+
+{# -- Conversations ------------------------------------------------------- #}
+<h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Conversations</h2>
+<div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Messages received</p>
+    <p class="num mt-2 text-3xl text-slate-900">{{ totals.inbound }}</p>
+    <p class="mt-1 text-xs text-slate-500">{{ totals.new_chats }} new chats, {{ totals.resolved }} resolved</p>
+  </div>
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Asked for a consultant</p>
+    <p class="num mt-2 text-3xl {% if totals.consultant_requests %}text-amber-600{% else %}text-slate-900{% endif %}">{{ totals.consultant_requests }}</p>
+    <p class="mt-1 text-xs text-slate-500">Customers who asked for a person</p>
+  </div>
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Typical first reply</p>
+    <p class="num mt-2 text-3xl text-slate-900">{{ first_response }}</p>
+    <p class="mt-1 text-xs text-slate-500">Median time from a new chat to a person's first reply</p>
+  </div>
+  <a href="{% url 'inbox:inbox' %}?view=open" class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md hover:ring-[#0065A9]/40">
+    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400">Waiting for a reply now</p>
+    <p class="num mt-2 text-3xl {% if totals.waiting_now %}text-amber-600{% else %}text-slate-900{% endif %}">{{ totals.waiting_now }}</p>
+    <p class="mt-1 text-xs text-slate-500">Open chats where the customer spoke last{% if totals.opt_outs %} · {{ totals.opt_outs }} opted out this period{% endif %}</p>
+  </a>
+</div>
+
+{# -- Daily volume -------------------------------------------------------- #}
+<div class="mt-8 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h2 class="text-sm font-semibold text-slate-900">Messages per day</h2>
+    <div class="flex items-center gap-4 text-xs text-slate-600">
+      <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm bg-[#0065A9]"></span>Sent</span>
+      <span class="flex items-center gap-1.5"><span class="inline-block h-2.5 w-2.5 rounded-sm bg-[#76BD4C]"></span>Received</span>
+      <span class="text-slate-400">Busiest day: {{ peak }}</span>
+    </div>
+  </div>
+  <div class="mt-4 overflow-x-auto">
+    <div class="flex h-40 min-w-[560px] items-end gap-[3px] border-b border-slate-200" role="img" aria-label="Messages sent and received per day">
+      {% for entry in daily %}
+        <div class="group relative flex h-full flex-1 items-end justify-center gap-[2px]" title="{{ entry.day|date:'D j M' }}: {{ entry.out }} sent, {{ entry.in }} received">
+          <div class="w-full max-w-[10px] rounded-t bg-[#0065A9] transition group-hover:opacity-80" style="height: {{ entry.out_pct }}%; min-height: {% if entry.out %}2px{% else %}0{% endif %}"></div>
+          <div class="w-full max-w-[10px] rounded-t bg-[#76BD4C] transition group-hover:opacity-80" style="height: {{ entry.in_pct }}%; min-height: {% if entry.in %}2px{% else %}0{% endif %}"></div>
+          <div class="pointer-events-none absolute bottom-full left-1/2 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] text-white shadow group-hover:block">
+            {{ entry.day|date:'D j M' }} · {{ entry.out }} sent · {{ entry.in }} received
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="flex min-w-[560px] gap-[3px] pt-1 text-[10px] text-slate-400">
+      {% for entry in daily %}<div class="flex-1 text-center">{{ entry.label }}</div>{% endfor %}
+    </div>
+  </div>
+</div>
+
+{# -- Bulk sends ---------------------------------------------------------- #}
+<div class="mt-8 flex items-end justify-between">
+  <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Bulk sends</h2>
+  {% if membership.can_manage %}<a href="{% url 'library:bulk_send' %}" class="text-sm text-[#0065A9] hover:underline">Send to a group →</a>{% endif %}
+</div>
+<div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+      <tr>
+        <th class="px-4 py-3 text-left">Message</th>
+        <th class="px-4 py-3 text-left">Audience</th>
+        <th class="px-4 py-3 text-left">When</th>
+        <th class="px-4 py-3 text-right">People</th>
+        <th class="px-4 py-3 text-right">Sent</th>
+        <th class="px-4 py-3 text-right">Delivered</th>
+        <th class="px-4 py-3 text-right">Read</th>
+        <th class="px-4 py-3 text-right">Replied</th>
+        <th class="px-4 py-3 text-right">Not delivered</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for batch in batches %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3 font-medium text-slate-900">
+            {{ batch.template_name }}
+            {% if batch.status != 'done' %}<span class="ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium {% if batch.status == 'dropped' %}bg-rose-100 text-rose-700{% else %}bg-amber-100 text-amber-800{% endif %}">{{ batch.get_status_display }}</span>{% endif %}
+          </td>
+          <td class="px-4 py-3 text-slate-600">{{ batch.audience_label }}</td>
+          <td class="px-4 py-3 text-slate-500">{{ batch.created_at|date:"j M, H:i" }}{% if batch.created_by %} · {{ batch.created_by.display_name }}{% endif %}</td>
+          <td class="num px-4 py-3 text-right">{{ batch.recipient_count }}</td>
+          <td class="num px-4 py-3 text-right">{{ batch.stats.sent }}</td>
+          <td class="num px-4 py-3 text-right">{{ batch.stats.delivered }} <span class="text-xs text-slate-400">{{ batch.stats.delivered_pct }}%</span></td>
+          <td class="num px-4 py-3 text-right">{{ batch.stats.read }} <span class="text-xs text-slate-400">{{ batch.stats.read_pct }}%</span></td>
+          <td class="num px-4 py-3 text-right">{{ batch.stats.replied }} <span class="text-xs text-slate-400">{{ batch.stats.replied_pct }}%</span></td>
+          <td class="num px-4 py-3 text-right {% if batch.stats.failed %}text-rose-600{% endif %}">{{ batch.stats.failed }}{% if batch.stats.blocked %} <span class="text-xs text-slate-400">+{{ batch.stats.blocked }} held</span>{% endif %}</td>
+          <td class="px-4 py-3 text-right"><a href="{% url 'reporting:bulk_send' batch.pk %}" class="text-[#0065A9] hover:underline">Details</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No bulk sends yet. Once you send a message to an audience it will show up here with its delivery figures.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# -- Templates ----------------------------------------------------------- #}
+<h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Approved messages, last {{ days }} days</h2>
+<div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+      <tr>
+        <th class="px-4 py-3 text-left">Template</th>
+        <th class="px-4 py-3 text-right">Sent</th>
+        <th class="px-4 py-3 text-right">Delivered</th>
+        <th class="px-4 py-3 text-right">Read</th>
+        <th class="px-4 py-3 text-right">Replied</th>
+        <th class="px-4 py-3 text-right">Not delivered</th>
+        <th class="px-4 py-3 text-left">Read rate</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for row in template_rows %}
+        <tr>
+          <td class="px-4 py-3 font-medium text-slate-900">{{ row.name }}</td>
+          <td class="num px-4 py-3 text-right">{{ row.sent }}</td>
+          <td class="num px-4 py-3 text-right">{{ row.delivered }} <span class="text-xs text-slate-400">{{ row.delivered_pct }}%</span></td>
+          <td class="num px-4 py-3 text-right">{{ row.read }} <span class="text-xs text-slate-400">{{ row.read_pct }}%</span></td>
+          <td class="num px-4 py-3 text-right">{{ row.replied }} <span class="text-xs text-slate-400">{{ row.replied_pct }}%</span></td>
+          <td class="num px-4 py-3 text-right {% if row.failed %}text-rose-600{% endif %}">{{ row.failed }}{% if row.blocked %} <span class="text-xs text-slate-400">+{{ row.blocked }} held</span>{% endif %}</td>
+          <td class="px-4 py-3">
+            <div class="h-2 w-40 overflow-hidden rounded-full bg-slate-100" title="{{ row.read_pct }}% read, {{ row.delivered_pct }}% delivered">
+              <div class="h-full rounded-full bg-[#0065A9]" style="width: {{ row.read_pct }}%"></div>
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No approved messages were sent in this period.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-8 grid gap-4 lg:grid-cols-2">
+  {# -- Failure reasons --------------------------------------------------- #}
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-900">Why messages were not delivered</h2>
+    {% if failure_rows %}
+      <ul class="mt-4 space-y-3">
+        {% for row in failure_rows %}
+          <li>
+            <div class="flex items-start justify-between gap-3 text-sm">
+              <span class="text-slate-700">{{ row.reason }}</span>
+              <span class="num shrink-0 text-slate-900">{{ row.count }} <span class="text-xs text-slate-400">{{ row.pct }}%</span></span>
+            </div>
+            <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-rose-400" style="width: {{ row.pct }}%"></div></div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="mt-3 text-sm text-slate-500">Nothing failed in this period.</p>
+    {% endif %}
+  </div>
+
+  {# -- Team ---------------------------------------------------------------- #}
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-900">Team activity</h2>
+    {% if agent_rows %}
+      <table class="mt-3 min-w-full text-sm">
+        <thead class="text-xs uppercase tracking-wider text-slate-500">
+          <tr><th class="py-2 text-left">Person</th><th class="py-2 text-right">Replies sent</th><th class="py-2 text-right">Chats resolved</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for row in agent_rows %}
+            <tr><td class="py-2 text-slate-900">{{ row.name }}</td><td class="num py-2 text-right">{{ row.replies }}</td><td class="num py-2 text-right">{{ row.resolved }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="mt-3 text-sm text-slate-500">Nobody on the team replied to a customer in this period.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

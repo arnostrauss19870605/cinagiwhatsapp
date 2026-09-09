@@ -292,6 +292,8 @@ class DateIsNotBakedIntoCopyTests(TestCase):
         from apps.library.event_templates import HUMAN_FOOTER, TEMPLATES
 
         for definition in TEMPLATES:
+            if definition.get("internal"):
+                continue  # goes to staff phones, never to a customer
             footers = [c for c in definition["components"] if c["type"] == "FOOTER"]
             self.assertTrue(footers, f"{definition['name']} has no footer")
             self.assertEqual(footers[0]["text"], HUMAN_FOOTER)

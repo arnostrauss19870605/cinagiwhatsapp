@@ -84,16 +84,20 @@ def bulk_send(request):
         if error:
             flash.error(request, error)
         else:
-            from apps.library.bulk import audience_contacts
+            from apps.library.bulk import audience_contacts, resolve_channel, start_bulk_send
             from apps.library.tasks import run_bulk_send
 
             recipients = audience_contacts(request.workspace, picked).count()
             if recipients == 0:
                 flash.error(request, "Those audiences have nobody in them yet.")
             else:
+                batch = start_bulk_send(
+                    request.workspace, resolve_channel(request.workspace), chosen, picked, values,
+                    header_media=header_media, created_by=request.user, recipient_count=recipients,
+                )
                 run_bulk_send.delay(
                     request.workspace.pk, chosen.pk, [a.pk for a in picked],
-                    values, header_media, request.user.pk,
+                    values, header_media, request.user.pk, batch.pk,
                 )
                 audit(
                     "library.bulk_send_queued", request=request, target=chosen,
@@ -102,9 +106,9 @@ def bulk_send(request):
                 flash.success(
                     request,
                     f"Sending '{chosen.name}' to {recipients} people has started. "
-                    "The audit log shows the outcome once it finishes.",
+                    "This page shows how it is going.",
                 )
-                return redirect("library:bulk_send")
+                return redirect("reporting:bulk_send", pk=batch.pk)
 
     value_fields = range(2, chosen.variable_count + 1) if chosen else []
     return render(

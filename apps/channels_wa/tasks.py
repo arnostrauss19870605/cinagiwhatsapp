@@ -68,6 +68,14 @@ def sync_templates(channel_id=None):
     return synced
 
 
+@shared_task(name="apps.channels_wa.tasks.alert_pending_chats", ignore_result=True)
+def alert_pending_chats():
+    """Nudge the people on duty about chats still waiting for a reply, every minute."""
+    from apps.inbox.alerts import notify_pending
+
+    return notify_pending()
+
+
 @shared_task(name="apps.channels_wa.tasks.sweep_unassigned", ignore_result=True)
 def sweep_unassigned():
     """Anything still waiting gets another shot at an agent, every minute."""

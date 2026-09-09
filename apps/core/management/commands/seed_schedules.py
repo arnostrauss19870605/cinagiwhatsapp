@@ -27,6 +27,14 @@ class Command(BaseCommand):
             },
         )
         PeriodicTask.objects.update_or_create(
+            name="Tell the people on duty about chats waiting for a reply",
+            defaults={
+                "interval": every_minute,
+                "task": "apps.channels_wa.tasks.alert_pending_chats",
+                "queue": "default",
+            },
+        )
+        PeriodicTask.objects.update_or_create(
             name="Refresh approved WhatsApp templates",
             defaults={
                 "crontab": nightly,

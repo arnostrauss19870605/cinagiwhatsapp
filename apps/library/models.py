@@ -122,6 +122,54 @@ class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
         return components
 
 
+class BulkSend(WorkspaceScopedModel, TimeStampedModel):
+    """One press of the bulk-send button, and what became of it.
+
+    The messages themselves carry the delivery truth (receipts update them for
+    days afterwards), so the counts here are what the sender saw at the end of
+    the run. Analytics re-derive delivered/read/replied from the messages that
+    point back here.
+    """
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Waiting to start"
+        RUNNING = "running", "Sending"
+        DONE = "done", "Finished"
+        DROPPED = "dropped", "Could not start"
+
+    channel = models.ForeignKey(
+        "channels_wa.WhatsAppChannel", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="bulk_sends",
+    )
+    template = models.ForeignKey(
+        MessageTemplate, null=True, blank=True, on_delete=models.SET_NULL, related_name="bulk_sends"
+    )
+    template_name = models.CharField(max_length=200)
+    audience_names = models.JSONField(default=list, blank=True)
+    values = models.JSONField(default=list, blank=True)
+    header_media = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="bulk_sends"
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.QUEUED)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    recipient_count = models.PositiveIntegerField(default=0)
+    sent_count = models.PositiveIntegerField(default=0)
+    blocked_count = models.PositiveIntegerField(default=0)
+    failed_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.template_name} to {', '.join(self.audience_names) or 'nobody'}"
+
+    @property
+    def audience_label(self):
+        return ", ".join(self.audience_names) or "No audience"
+
+
 class QuickSnippet(WorkspaceScopedModel, TimeStampedModel):
     """A saved reply an agent can drop into a chat. Ours, not Meta's.
 
