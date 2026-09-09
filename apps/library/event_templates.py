@@ -57,6 +57,8 @@ HUMAN_KEYWORDS = ["agent", "human", "person", "help", "speak to someone", "opera
 # real image or document is supplied per send.
 SAMPLE_IMAGE = "docs/samples/header_sample.png"
 SAMPLE_DOCUMENT = "docs/samples/recap_sample.pdf"
+# The real agenda: the invite pack is reviewed against the file it will send.
+AGENDA_DOCUMENT = "docs/samples/launch_agenda.pdf"
 
 
 def body(text, *examples):
@@ -81,8 +83,8 @@ def image_header():
     return {"type": "HEADER", "format": "IMAGE", "_sample": SAMPLE_IMAGE}
 
 
-def document_header():
-    return {"type": "HEADER", "format": "DOCUMENT", "_sample": SAMPLE_DOCUMENT}
+def document_header(sample=SAMPLE_DOCUMENT):
+    return {"type": "HEADER", "format": "DOCUMENT", "_sample": sample}
 
 
 TEMPLATES = [
@@ -181,6 +183,34 @@ TEMPLATES = [
             ),
             footer(),
             buttons("Ask about the agenda", "Cinagi Consultant"),
+        ],
+    },
+    {
+        # Thank-you to guests who have RSVP'd, with the agenda PDF attached.
+        # MARKETING, not UTILITY: Meta files any template that mixes a
+        # confirmation with promotional content (here, the prize draw) as
+        # marketing, and a UTILITY submission would come back INCORRECT_CATEGORY.
+        "name": "event_rsvp_thanks_agenda",
+        "category": "MARKETING",
+        "send_from": dt.date(2026, 9, 9),
+        "send_until": EVENT_DATE - dt.timedelta(days=1),
+        "components": [
+            document_header(AGENDA_DOCUMENT),
+            body(
+                "Hi {{1}},\n\n"
+                "Thank you for RSVP’ing to the Cinagi 2027 Product Update & Launch. "
+                "We’re looking forward to welcoming you! We’ve attached the agenda "
+                "and event details for easy reference.\n\n"
+                "And to make the lead-up a little more interesting… 🎁\n\n"
+                "Keep an eye on your WhatsApp — we’ll be sending a few quick "
+                "questions, with each answer earning you an entry into our prize draw, "
+                "plus a bonus entry up for grabs on the day.\n\n"
+                "See you there!\n\n"
+                "The Cinagi Team",
+                "Arno",
+            ),
+            footer(),
+            buttons("Cinagi Consultant"),
         ],
     },
     {
