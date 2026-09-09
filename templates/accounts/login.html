@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Sign in{% endblock %}
-{% block main_class %}mx-auto flex min-h-screen max-w-md items-center px-4{% endblock %}
+{% block main_class %}mx-auto flex min-h-screen w-full max-w-lg items-center px-4 py-10{% endblock %}
 {% block content %}
-<div class="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+<div class="w-full rounded-3xl border border-slate-200 bg-white p-10 shadow-xl shadow-[#0065A9]/10">
   <div class="flex items-center gap-3">
-    <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#0065A9] to-[#00a9e0] text-base font-bold text-white shadow-md shadow-[#0065A9]/40">C</span>
-    <div>
-      <h1 class="text-xl font-semibold text-slate-900">Sign in</h1>
-      <p class="text-sm text-slate-500">We will email you a one-time code. No password needed.</p>
-    </div>
+    <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#0065A9] to-[#00a9e0] text-lg font-bold text-white shadow-md shadow-[#0065A9]/40">C</span>
+    <span class="text-sm font-semibold tracking-tight text-slate-700">{{ SITE_NAME }}</span>
   </div>
-  <form method="post" class="mt-6 space-y-4">
+  <h1 class="mt-8 text-2xl font-semibold tracking-tight text-slate-900">Sign in</h1>
+  <p class="mt-2 text-sm leading-relaxed text-slate-500">Enter your work email address and we will send you a one-time code. There is no password.</p>
+  <form method="post" class="mt-8 space-y-5" x-data="{busy:false}" @submit="if(busy){$event.preventDefault()} busy=true">
     {% csrf_token %}
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
     <div>
@@ -18,8 +17,8 @@
       {{ form.email }}
       {% for error in form.email.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
     </div>
-    <button class="w-full rounded-lg accent px-4 py-2.5 font-medium text-white hover:opacity-90">Email me a code</button>
+    <button :disabled="busy" :class="busy && 'opacity-60 cursor-wait'" class="w-full rounded-xl accent px-4 py-3 font-semibold text-white shadow-sm transition hover:opacity-90">Email me a code</button>
   </form>
-  <p class="mt-6 text-xs text-slate-400">Only people an administrator has added can sign in. If you should have access and do not, ask your administrator.</p>
+  <p class="mt-8 text-xs leading-relaxed text-slate-400">Only people an administrator has added can sign in. If you should have access and do not, ask your administrator.</p>
 </div>
 {% endblock %}
