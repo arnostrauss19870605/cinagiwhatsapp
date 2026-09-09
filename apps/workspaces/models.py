@@ -123,6 +123,20 @@ class WorkspaceMembership(TimeStampedModel):
     workspace = models.ForeignKey(Workspace, on_delete=models.CASCADE, related_name="memberships")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.AGENT)
     is_active = models.BooleanField(default=True)
+    # Rights are granted per person, not implied by role: an administrator who
+    # should never press "send to 600 brokers" simply does not get the box ticked.
+    # The owner always has every right, so nobody can lock themselves out.
+    can_send_bulk = models.BooleanField(
+        default=False, help_text="May send an approved message to whole audiences."
+    )
+    can_edit_hours = models.BooleanField(
+        default=False, help_text="May change working hours and holidays."
+    )
+
+    RIGHTS = [
+        ("can_send_bulk", "Send bulk messages"),
+        ("can_edit_hours", "Change working hours and holidays"),
+    ]
 
     class Meta:
         constraints = [
@@ -143,6 +157,18 @@ class WorkspaceMembership(TimeStampedModel):
     @property
     def can_reply(self):
         return self.role in self.REPLY_ROLES
+
+    @property
+    def is_owner(self):
+        return self.role == self.Role.OWNER
+
+    @property
+    def may_send_bulk(self):
+        return self.is_owner or self.can_send_bulk
+
+    @property
+    def may_edit_hours(self):
+        return self.is_owner or self.can_edit_hours
 
 
 class BusinessHours(models.Model):

@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.core.audit import audit
-from apps.core.scoping import require_role
+from apps.core.scoping import require_right, require_role
 
 from .forms import (
     BusinessHoursFormSet,
@@ -90,7 +90,7 @@ def hours(request):
     workspace = request.workspace
     if workspace is None:
         return redirect("workspaces:list")
-    require_role(request, *WorkspaceMembership.MANAGE_ROLES)
+    require_right(request, "edit_hours")
 
     for weekday in range(7):
         BusinessHours.objects.get_or_create(
@@ -127,7 +127,7 @@ def hours(request):
 @login_required
 def holiday_add(request):
     workspace = request.workspace
-    require_role(request, *WorkspaceMembership.MANAGE_ROLES)
+    require_right(request, "edit_hours")
     form = HolidayForm(request.POST)
     if form.is_valid():
         holiday = form.save(commit=False)
@@ -139,7 +139,7 @@ def holiday_add(request):
 
 @login_required
 def holiday_delete(request, pk):
-    require_role(request, *WorkspaceMembership.MANAGE_ROLES)
+    require_right(request, "edit_hours")
     Holiday.objects.filter(pk=pk, workspace=request.workspace).delete()
     return redirect("workspaces:hours")
 

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Enter your code{% endblock %}
+{% block main_class %}mx-auto flex min-h-screen max-w-md items-center px-4{% endblock %}
+{% block content %}
+<div class="w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+  <h1 class="text-xl font-semibold text-slate-900">Check your email</h1>
+  <p class="mt-1 text-sm text-slate-500">If <strong>{{ email }}</strong> has a login, a six-digit code is on its way. Type it below.</p>
+  <form method="post" class="mt-6 space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-sm font-medium text-slate-700" for="{{ form.code.id_for_label }}">{{ form.code.label }}</label>
+      {{ form.code }}
+      {% for error in form.code.errors %}<p class="mt-1 text-xs text-rose-600">{{ error }}</p>{% endfor %}
+    </div>
+    <button class="w-full rounded-lg accent px-4 py-2.5 font-medium text-white hover:opacity-90">Sign in</button>
+  </form>
+  <p class="mt-6 text-xs text-slate-400">
+    Nothing arrived? Check your junk folder, or <a href="{% url 'accounts:login' %}" class="text-[#0065A9] hover:underline">ask for a new code</a>.
+  </p>
+</div>
+{% endblock %}

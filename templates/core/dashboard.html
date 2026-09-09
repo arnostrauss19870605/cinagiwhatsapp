@@ -29,7 +29,7 @@
       <span class="h-2 w-2 rounded-full {% if workspace.is_open %}bg-[#76BD4C] shadow-[0_0_6px_#76BD4C]{% else %}bg-slate-300{% endif %}"></span>
       {% if workspace.is_open %}Open{% else %}Closed{% endif %}
     </p>
-    <a href="{% url 'workspaces:hours' %}" class="text-xs text-slate-500 underline hover:text-[#0065A9]">Working hours</a>
+    {% if membership.may_edit_hours %}<a href="{% url 'workspaces:hours' %}" class="text-xs text-slate-500 underline hover:text-[#0065A9]">Working hours</a>{% endif %}
   </div>
 </div>
 

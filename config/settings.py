@@ -103,6 +103,12 @@ LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "core:dashboard"
 LOGOUT_REDIRECT_URL = "accounts:login"
 
+# Sign-in is by emailed one-time code. Only addresses on these domains may be
+# given a login or sign in; empty means any domain an administrator adds.
+LOGIN_EMAIL_DOMAINS = env_list("LOGIN_EMAIL_DOMAINS")
+LOGIN_CODE_MINUTES = int(env("LOGIN_CODE_MINUTES", "10"))
+LOGOUT_REDIRECT_URL = "accounts:login"
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+
+<div class="hero flex flex-wrap items-center justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Account</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Users</h1>
+    <p class="mt-2 max-w-2xl text-sm text-sky-100">
+      Everyone who can sign in, which numbers they can work on, and what they may do there.
+      New people get an email explaining how to sign in.
+    </p>
+  </div>
+  <a href="{% url 'accounts:user_create' %}" class="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-[#0065A9] shadow transition hover:bg-sky-50">+ Add a user</a>
+</div>
+
+<div class="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+      <tr>
+        <th class="px-5 py-3">Person</th>
+        <th class="px-5 py-3">Numbers and role</th>
+        <th class="px-5 py-3">Rights</th>
+        <th class="px-5 py-3">Last signed in</th>
+        <th class="px-5 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for person in people %}
+        <tr class="{% if not person.is_active %}bg-slate-50 text-slate-400{% endif %}">
+          <td class="px-5 py-3">
+            <p class="font-medium {% if person.is_active %}text-slate-900{% endif %}">{{ person.display_name }}{% if person == user %} <span class="text-xs text-slate-400">(you)</span>{% endif %}</p>
+            <p class="text-xs text-slate-500">{{ person.email }}{% if person.phone %} · {{ person.phone }}{% endif %}</p>
+            {% if not person.is_active %}<span class="mt-1 inline-block rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600">Switched off</span>{% endif %}
+            {% if person.is_platform_admin %}<span class="mt-1 inline-block rounded-full bg-[#0065A9]/10 px-2 py-0.5 text-[11px] font-medium text-[#0065A9]">Platform admin</span>{% endif %}
+          </td>
+          <td class="px-5 py-3">
+            {% for m in person.workspace_memberships.all %}
+              <p><span class="font-medium">{{ m.workspace.name }}</span> <span class="text-slate-500">· {{ m.get_role_display|lower }}</span></p>
+            {% empty %}
+              <span class="text-slate-400">No numbers yet</span>
+            {% endfor %}
+          </td>
+          <td class="px-5 py-3 text-xs text-slate-600">
+            {% for m in person.workspace_memberships.all %}
+              <p>{% if m.is_owner %}Everything{% else %}{% if m.can_send_bulk %}Bulk send{% endif %}{% if m.can_send_bulk and m.can_edit_hours %}, {% endif %}{% if m.can_edit_hours %}Hours{% endif %}{% if not m.can_send_bulk and not m.can_edit_hours %}<span class="text-slate-400">—</span>{% endif %}{% endif %}</p>
+            {% endfor %}
+          </td>
+          <td class="px-5 py-3 text-slate-500">{% if person.last_login %}{{ person.last_login|timesince }} ago{% else %}Never{% endif %}</td>
+          <td class="px-5 py-3">
+            <div class="flex items-center justify-end gap-3 text-xs">
+              <a href="{% url 'accounts:user_edit' person.pk %}" class="font-medium text-[#0065A9] hover:underline">Edit</a>
+              {% if person.is_active %}
+                <form method="post" action="{% url 'accounts:user_resend_welcome' person.pk %}">{% csrf_token %}
+                  <button class="text-slate-500 hover:text-[#0065A9] hover:underline">Resend sign-in email</button>
+                </form>
+              {% endif %}
+              {% if person != user %}
+                <form method="post" action="{% url 'accounts:user_toggle_active' person.pk %}">{% csrf_token %}
+                  <button class="{% if person.is_active %}text-rose-600{% else %}text-[#3d7a1e]{% endif %} hover:underline">{% if person.is_active %}Switch off{% else %}Switch on{% endif %}</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="px-5 py-8 text-center text-slate-500">Nobody yet. Add the first user above.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="mt-4 text-xs text-slate-500">
+  Switching someone off keeps their chats and history but stops them signing in. Owners of a number can only be changed by another owner.
+</p>
+{% endblock %}

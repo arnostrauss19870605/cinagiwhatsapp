@@ -4,7 +4,7 @@ from django.db.models import Count, Q
 from django.shortcuts import redirect, render
 
 from apps.core.audit import audit
-from apps.core.scoping import require_role, scoped_get_or_404
+from apps.core.scoping import require_right, require_role, scoped_get_or_404
 from apps.workspaces.models import WorkspaceMembership
 
 from .forms import QuickSnippetForm
@@ -48,7 +48,7 @@ def bulk_send(request):
 
     if request.workspace is None:
         return redirect("workspaces:list")
-    require_role(request, *WorkspaceMembership.MANAGE_ROLES)
+    require_right(request, "send_bulk")
 
     templates = (
         MessageTemplate.objects.for_request(request)

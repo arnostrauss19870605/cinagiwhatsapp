@@ -60,3 +60,11 @@ def require_role(request, *roles):
     if membership is None or membership.role not in roles:
         raise PermissionDenied("You do not have permission to do that.")
     return membership
+
+
+def require_right(request, right):
+    """A per-person right on the active workspace: "send_bulk" or "edit_hours"."""
+    membership = getattr(request, "membership", None)
+    if membership is None or not getattr(membership, f"may_{right}", False):
+        raise PermissionDenied("You do not have permission to do that.")
+    return membership

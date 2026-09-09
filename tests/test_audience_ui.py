@@ -28,7 +28,9 @@ class AudienceUiBase(TestCase):
         cls.workspace = Workspace.objects.create(name="Cinagi Broker Support")
         cls.manager = User.objects.create_user("manager", "m@example.com", "pw12345678")
         cls.agent = User.objects.create_user("agent", "a@example.com", "pw12345678")
-        WorkspaceMembership.objects.create(user=cls.manager, workspace=cls.workspace, role="admin")
+        WorkspaceMembership.objects.create(
+            user=cls.manager, workspace=cls.workspace, role="admin", can_send_bulk=True
+        )
         WorkspaceMembership.objects.create(user=cls.agent, workspace=cls.workspace, role="agent")
         cls.channel = WhatsAppChannel.objects.create(
             workspace=cls.workspace, display_name="Broker Support",

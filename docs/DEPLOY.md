@@ -83,6 +83,18 @@ docker compose -f docker-compose.prod.yml logs -f web
 
 `migrate` and `collectstatic` run automatically on every container start.
 
+### Signing in
+
+Nobody has a password. People sign in with their work email address and a six-digit code
+that is emailed to them through Microsoft Graph (the `MS_GRAPH_*` settings), so Graph must be
+configured before anyone but the superuser can get in. `LOGIN_EMAIL_DOMAINS` limits logins to
+your organisation's domain(s).
+
+The superuser created above signs in the same way, using the email address given to
+`createsuperuser`. Make it an address on your domain. From then on, create everyone else on the
+**Users** page in the app: each new person is emailed how to sign in, and is linked to one or more
+numbers with a role and, where wanted, the rights to send bulk messages and change working hours.
+
 Check it is alive:
 
 ```bash

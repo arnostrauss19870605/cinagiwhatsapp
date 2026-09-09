@@ -41,10 +41,18 @@
       <a href="{% url 'library:templates' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Templates</a>
       {% if membership.can_manage %}
         <a href="{% url 'contacts:audiences' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Audiences</a>
+      {% endif %}
+      {% if membership.may_send_bulk %}
         <a href="{% url 'library:bulk_send' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Bulk send</a>
+      {% endif %}
+      {% if membership.can_manage %}
         <a href="{% url 'channels_wa:list' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Numbers</a>
+      {% endif %}
+      {% if membership.may_edit_hours %}
         <a href="{% url 'workspaces:hours' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Hours</a>
-        <a href="{% url 'workspaces:team' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Team</a>
+      {% endif %}
+      {% if membership.can_manage or user.is_platform_admin %}
+        <a href="{% url 'accounts:users' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Users</a>
       {% endif %}
       {% if membership.can_supervise %}
         <a href="{% url 'reporting:overview' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Analytics</a>
@@ -61,7 +69,8 @@
           <a href="{% url 'agents:me' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">My availability</a>
           {% if membership.can_supervise %}<a href="{% url 'agents:team' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">Who is available</a>{% endif %}
           {% if membership.can_manage %}<a href="{% url 'workspaces:settings' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">Workspace settings</a>{% endif %}
-          <a href="{% url 'accounts:password_change' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">Change password</a>
+          {% if membership.can_manage or user.is_platform_admin %}<a href="{% url 'accounts:users' %}" class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">Manage users</a>{% endif %}
+          <p class="px-3 pb-1 pt-2 text-xs text-slate-400">Signed in as {{ user.email }}</p>
           <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}
             <button class="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50">Sign out</button>
           </form>

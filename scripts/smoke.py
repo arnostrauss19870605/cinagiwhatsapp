@@ -61,6 +61,7 @@ pages = [
  ("my availability","/agents/me/"),("team availability","/agents/availability/"),
  ("send template form",f"/inbox/{conv2.pk}/send-template/?template_id={MessageTemplate.objects.first().pk}"),
  ("analytics","/analytics/"),("analytics 7 days","/analytics/?days=7"),
+ ("users","/accounts/users/"),("new user","/accounts/users/new/"),(f"edit user","/accounts/users/1/"),
  ("healthz","/healthz"),
 ]
 fails=0

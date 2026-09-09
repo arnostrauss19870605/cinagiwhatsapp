@@ -262,7 +262,9 @@ def overview(request):
 def bulk_send(request, pk):
     if request.workspace is None:
         return redirect("workspaces:list")
-    require_role(request, *WorkspaceMembership.SUPERVISE_ROLES)
+    # Whoever may press send may watch the result, whatever their role.
+    if not (request.membership and request.membership.may_send_bulk):
+        require_role(request, *WorkspaceMembership.SUPERVISE_ROLES)
     batch = scoped_get_or_404(BulkSend, request, pk=pk)
 
     show = request.GET.get("show") or "all"
