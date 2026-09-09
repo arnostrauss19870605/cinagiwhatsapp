@@ -7,6 +7,7 @@ urlpatterns = [
     path("login/", views.login_start, name="login"),
     path("login/code/", views.login_code, name="login_code"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("preferences/", views.preferences, name="preferences"),
     path("users/", views.users, name="users"),
     path("users/new/", views.user_create, name="user_create"),
     path("users/<int:pk>/", views.user_edit, name="user_edit"),

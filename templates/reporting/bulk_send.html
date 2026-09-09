@@ -6,16 +6,20 @@
 
 <div class="hero mt-3 flex flex-wrap items-center justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
   <div>
-    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Bulk send</p>
+    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Bulk send #{{ batch.pk }}</p>
     <h1 class="mt-1 text-3xl font-semibold tracking-tight">{{ batch.template_name }}</h1>
     <p class="mt-2 text-sm text-sky-100">
       To {{ batch.audience_label }} · {{ batch.created_at|date:"l j F, H:i" }}{% if batch.created_by %} · started by {{ batch.created_by.display_name }}{% endif %}
     </p>
     {% if batch.values %}<p class="mt-1 text-xs text-sky-200">Values: {{ batch.values|join:" · " }}</p>{% endif %}
   </div>
-  <span class="rounded-full px-4 py-1.5 text-sm font-medium ring-1 ring-white/30 {% if batch.status == 'done' %}bg-white/15{% elif batch.status == 'dropped' %}bg-rose-500/40{% else %}bg-amber-400/30{% endif %}">
-    {{ batch.get_status_display }}
-  </span>
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="{% url 'reporting:bulk_send_export' batch.pk 'xlsx' %}{% if show != 'all' %}?show={{ show }}{% endif %}" class="rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">Excel{% if show != 'all' %} (filtered){% endif %}</a>
+    <a href="{% url 'reporting:bulk_send_export' batch.pk 'pdf' %}{% if show != 'all' %}?show={{ show }}{% endif %}" class="rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">PDF report</a>
+    <span class="rounded-full px-4 py-1.5 text-sm font-medium ring-1 ring-white/30 {% if batch.status == 'done' %}bg-white/15{% elif batch.status == 'dropped' %}bg-rose-500/40{% else %}bg-amber-400/30{% endif %}">
+      {{ batch.get_status_display }}
+    </span>
+  </div>
 </div>
 
 <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -45,23 +49,66 @@
   </div>
 </div>
 
-<div class="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-  <h2 class="text-sm font-semibold text-slate-900">From sent to replied</h2>
-  <div class="mt-4 space-y-3">
-    {% for label, value, pct in stats.funnel %}
-      <div class="flex items-center gap-3 text-sm">
-        <span class="w-24 shrink-0 text-slate-600">{{ label }}</span>
-        <div class="h-3 flex-1 overflow-hidden rounded-full bg-slate-100">
-          <div class="h-full rounded-full bg-[#0065A9]" style="width: {{ pct }}%"></div>
+<div class="mt-6 grid gap-4 lg:grid-cols-3">
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 lg:col-span-2">
+    <h2 class="text-sm font-semibold text-slate-900">From sent to replied</h2>
+    <div class="mt-4 space-y-3">
+      {% for label, value, pct in stats.funnel %}
+        <div class="flex items-center gap-3 text-sm">
+          <span class="w-24 shrink-0 text-slate-600">{{ label }}</span>
+          <div class="h-3 flex-1 overflow-hidden rounded-full bg-slate-100">
+            <div class="h-full rounded-full bg-[#0065A9]" style="width: {{ pct }}%"></div>
+          </div>
+          <span class="num w-28 shrink-0 text-right text-slate-900">{{ value }} <span class="text-xs text-slate-400">{{ pct }}%</span></span>
         </div>
-        <span class="num w-28 shrink-0 text-right text-slate-900">{{ value }} <span class="text-xs text-slate-400">{{ pct }}%</span></span>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-900">Send again</h2>
+    {% if can_resend %}
+      <p class="mt-1 text-xs text-slate-500">Same message, same values, as a new send. People who opted out are skipped.</p>
+      <div class="mt-4 space-y-3">
+        <div x-data="{confirm:false}">
+          <form method="post" action="{% url 'reporting:bulk_send_resend' batch.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="group" value="failed">
+            <button type="button" @click="confirm=!confirm" {% if not resend_counts.failed %}disabled{% endif %}
+                    class="flex w-full items-center justify-between rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <span>Not delivered</span><span class="num text-slate-500">{{ resend_counts.failed }}</span>
+            </button>
+            <div x-show="confirm" x-cloak class="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
+              This sends to {{ resend_counts.failed }} people whose message never reached a phone. Numbers that failed for a permanent reason will fail again.
+              <button class="mt-2 w-full rounded-lg bg-[#0065A9] px-3 py-2 text-sm font-semibold text-white hover:bg-[#005490]">Yes, send to {{ resend_counts.failed }} people</button>
+            </div>
+          </form>
+        </div>
+        <div x-data="{confirm:false}">
+          <form method="post" action="{% url 'reporting:bulk_send_resend' batch.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="group" value="unread">
+            <button type="button" @click="confirm=!confirm" {% if not resend_counts.unread %}disabled{% endif %}
+                    class="flex w-full items-center justify-between rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50">
+              <span>Not read yet</span><span class="num text-slate-500">{{ resend_counts.unread }}</span>
+            </button>
+            <div x-show="confirm" x-cloak class="mt-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
+              This sends the same message again to {{ resend_counts.unread }} people who have not opened the first one. Give them a day or two before nudging.
+              <button class="mt-2 w-full rounded-lg bg-[#0065A9] px-3 py-2 text-sm font-semibold text-white hover:bg-[#005490]">Yes, send to {{ resend_counts.unread }} people</button>
+            </div>
+          </form>
+        </div>
       </div>
-    {% endfor %}
+    {% elif batch.template is None or not batch.template.is_usable %}
+      <p class="mt-1 text-xs text-slate-500">This message is no longer approved, so it cannot be sent again.</p>
+    {% else %}
+      <p class="mt-1 text-xs text-slate-500">You do not have the right to send bulk messages. An administrator can grant it on the Users page.</p>
+    {% endif %}
   </div>
 </div>
 
 <div class="mt-8 flex flex-wrap items-center justify-between gap-3">
-  <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Everyone this went to</h2>
+  <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500">Everyone this went to{% if page.paginator.count %} <span class="num font-normal normal-case text-slate-400">({{ page.paginator.count }})</span>{% endif %}</h2>
   <div class="flex gap-1 rounded-xl bg-slate-100 p-1">
     {% for key, label in filters %}
       <a href="?show={{ key }}" class="rounded-lg px-3 py-1 text-xs font-medium transition {% if key == show %}bg-white text-[#0065A9] shadow-sm{% else %}text-slate-600 hover:text-slate-900{% endif %}">{{ label }}</a>
@@ -113,5 +160,20 @@
     </tbody>
   </table>
 </div>
+
+{% if page.paginator.num_pages > 1 %}
+  <div class="mt-3 flex items-center justify-between text-sm text-slate-600">
+    <span>Showing {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }}</span>
+    <div class="flex items-center gap-1">
+      {% if page.has_previous %}
+        <a href="?show={{ show }}&page={{ page.previous_page_number }}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">← Previous</a>
+      {% endif %}
+      <span class="px-3 py-1.5 text-slate-500">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}
+        <a href="?show={{ show }}&page={{ page.next_page_number }}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
 
 {% endblock %}

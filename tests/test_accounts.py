@@ -232,6 +232,46 @@ class UserAdminTests(TestCase):
         welcome.assert_called_once()
 
 
+class ComposerPreferenceTests(TestCase):
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Cinagi Broker Support")
+        self.user = User.objects.create_user("sam@cinagi.co.za", "sam@cinagi.co.za")
+        WorkspaceMembership.objects.create(user=self.user, workspace=self.workspace, role="agent")
+        self.client.force_login(self.user)
+
+    def test_send_on_enter_is_on_by_default_and_can_be_switched_off(self):
+        self.assertTrue(self.user.send_on_enter)
+        response = self.client.post(reverse("accounts:preferences"), {"next": "/inbox/"})
+        self.assertRedirects(response, "/inbox/", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.send_on_enter)
+
+        response = self.client.post(
+            reverse("accounts:preferences"), {"send_on_enter": "on"}, HTTP_HX_REQUEST="true"
+        )
+        self.assertEqual(response.status_code, 204)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.send_on_enter)
+
+    def test_the_composer_reflects_the_preference(self):
+        from apps.channels_wa.models import WhatsAppChannel
+        from apps.contacts.models import Contact
+        from apps.inbox.models import Conversation
+
+        channel = WhatsAppChannel.objects.create(workspace=self.workspace, display_name="A", phone_number_id="1")
+        contact = Contact.objects.create(workspace=self.workspace, wa_id="27820000001")
+        conversation = Conversation.objects.create(
+            workspace=self.workspace, channel=channel, contact=contact,
+            last_inbound_at=timezone.now(), window_expires_at=timezone.now() + dt.timedelta(hours=24),
+        )
+        page = self.client.get(reverse("inbox:conversation", args=[conversation.pk]))
+        self.assertContains(page, "sendOnEnter: true")
+        self.user.send_on_enter = False
+        self.user.save()
+        page = self.client.get(reverse("inbox:conversation", args=[conversation.pk]))
+        self.assertContains(page, "sendOnEnter: false")
+
+
 class RightsTests(TestCase):
     def setUp(self):
         self.workspace = Workspace.objects.create(name="Cinagi Broker Support")

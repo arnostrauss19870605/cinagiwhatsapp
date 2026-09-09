@@ -16,6 +16,9 @@ class User(AbstractUser):
     is_platform_admin = models.BooleanField(
         default=False, help_text="Can see and manage every workspace."
     )
+    send_on_enter = models.BooleanField(
+        default=True, help_text="In a chat, Enter sends the message and Shift+Enter starts a new line."
+    )
 
     REQUIRED_FIELDS = ["email"]
 

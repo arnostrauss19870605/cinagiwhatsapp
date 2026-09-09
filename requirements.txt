@@ -14,3 +14,4 @@ gunicorn==23.0.*
 uvicorn[standard]==0.34.*
 Pillow==11.*
 reportlab==5.0.*
+openpyxl==3.1.*

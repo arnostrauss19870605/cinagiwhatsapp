@@ -99,6 +99,23 @@ def login_code(request):
     return render(request, "accounts/login_code.html", {"form": form, "email": email})
 
 
+@login_required
+@require_POST
+def preferences(request):
+    """Personal settings from the chat screen. Saved per person, not per browser."""
+    request.user.send_on_enter = request.POST.get("send_on_enter") == "on"
+    request.user.save(update_fields=["send_on_enter"])
+    if request.headers.get("HX-Request"):
+        from django.http import HttpResponse
+
+        return HttpResponse(status=204)
+    messages.success(
+        request,
+        "Enter now sends your message." if request.user.send_on_enter else "Enter now starts a new line.",
+    )
+    return redirect(_safe_next(request) or "inbox:inbox")
+
+
 # -- users ----------------------------------------------------------------
 
 

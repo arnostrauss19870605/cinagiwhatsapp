@@ -25,7 +25,12 @@ def _finish(conversation, message, result):
 
     if result.ok:
         conversation.touch_outbound()
-        if conversation.status in (Conversation.Status.QUEUED, Conversation.Status.BOT):
+        # A person replying takes the chat out of the queue. A campaign or the
+        # automation sending does not: nobody is "with" the customer, and calling
+        # it assigned would make every bulk send look like a chat needing help.
+        if message.actor == Message.Actor.AGENT and conversation.status in (
+            Conversation.Status.QUEUED, Conversation.Status.BOT
+        ):
             conversation.status = Conversation.Status.ASSIGNED
         conversation.unread_agent_count = 0
         conversation.save()

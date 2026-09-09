@@ -10,14 +10,20 @@ import datetime as dt
 import statistics
 from collections import Counter
 
+from django.contrib import messages as flash
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Exists, F, OuterRef, Q
 from django.db.models.functions import TruncDate
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.text import slugify
+from django.views.decorators.http import require_POST
 
 from apps.contacts.models import Contact
-from apps.core.scoping import require_role, scoped_get_or_404
+from apps.core.audit import audit
+from apps.core.scoping import require_right, require_role, scoped_get_or_404
 from apps.inbox.models import Conversation, Message
 from apps.library.models import BulkSend
 from apps.workspaces.models import WorkspaceMembership
@@ -258,46 +264,166 @@ def overview(request):
     )
 
 
-@login_required
-def bulk_send(request, pk):
+FILTERS = [
+    ("all", "Everyone"),
+    ("read", "Read"),
+    ("unread", "Not read yet"),
+    ("replied", "Replied"),
+    ("failed", "Not delivered"),
+]
+
+# The two groups worth another go. "Not read yet" means WhatsApp accepted it
+# but the person has not opened it; "not delivered" means it never reached a
+# phone. Read and replied people are never resent to from here.
+RESEND_GROUPS = {
+    "failed": ("not delivered", [Message.Status.FAILED, Message.Status.BLOCKED]),
+    "unread": ("not read yet", [Message.Status.SENT, Message.Status.DELIVERED]),
+}
+
+PAGE_SIZE = 50
+
+
+def _batch_access(request, pk):
     if request.workspace is None:
-        return redirect("workspaces:list")
+        return None, redirect("workspaces:list")
     # Whoever may press send may watch the result, whatever their role.
     if not (request.membership and request.membership.may_send_bulk):
         require_role(request, *WorkspaceMembership.SUPERVISE_ROLES)
-    batch = scoped_get_or_404(BulkSend, request, pk=pk)
+    return scoped_get_or_404(BulkSend, request, pk=pk), None
 
-    show = request.GET.get("show") or "all"
+
+def _recipients(batch, show):
     recipients = (
         batch.messages.select_related("conversation__contact")
         .annotate(replied=REPLIED)
         .order_by("created_at")
     )
     if show == "failed":
-        recipients = recipients.filter(
-            wa_status__in=[Message.Status.FAILED, Message.Status.BLOCKED]
-        )
+        recipients = recipients.filter(wa_status__in=RESEND_GROUPS["failed"][1])
     elif show == "replied":
         recipients = recipients.filter(replied=True)
     elif show == "unread":
-        recipients = recipients.filter(wa_status__in=[Message.Status.SENT, Message.Status.DELIVERED])
+        recipients = recipients.filter(wa_status__in=RESEND_GROUPS["unread"][1])
     elif show == "read":
         recipients = recipients.filter(wa_status=Message.Status.READ)
+    return recipients
 
+
+def _show(request):
+    show = request.GET.get("show") or "all"
+    return show if show in dict(FILTERS) else "all"
+
+
+@login_required
+def bulk_send(request, pk):
+    batch, bounce = _batch_access(request, pk)
+    if bounce:
+        return bounce
+    show = _show(request)
+    page = Paginator(_recipients(batch, show), PAGE_SIZE).get_page(request.GET.get("page"))
+    stats = batch_stats(batch)
+    resend_counts = {
+        key: batch.messages.filter(wa_status__in=statuses).count()
+        for key, (_, statuses) in RESEND_GROUPS.items()
+    }
     return render(
         request,
         "reporting/bulk_send.html",
         {
             "batch": batch,
-            "stats": batch_stats(batch),
-            "recipients": recipients[:1000],
+            "stats": stats,
+            "page": page,
+            "recipients": page.object_list,
             "show": show,
-            "filters": [
-                ("all", "Everyone"),
-                ("read", "Read"),
-                ("unread", "Not read yet"),
-                ("replied", "Replied"),
-                ("failed", "Not delivered"),
-            ],
+            "filters": FILTERS,
+            "resend_counts": resend_counts,
+            "can_resend": bool(request.membership and request.membership.may_send_bulk)
+            and batch.template is not None and batch.template.is_usable,
         },
     )
+
+
+@login_required
+def bulk_send_export(request, pk, fmt):
+    """The recipient list as Excel, or the whole thing as a PDF report.
+
+    Both respect the status filter on the page, so "export the not delivered
+    ones" is one click. Every export is audited: a list of customer numbers is
+    data leaving the platform.
+    """
+    from .exports import recipients_xlsx, summary_pdf
+
+    batch, bounce = _batch_access(request, pk)
+    if bounce:
+        return bounce
+    show = _show(request)
+    recipients = list(_recipients(batch, show))
+    stats = batch_stats(batch)
+    stem = f"{slugify(batch.template_name) or 'bulk-send'}-{batch.pk}" + (f"-{show}" if show != "all" else "")
+    audit("bulk_send.exported", request=request, target=batch, fmt=fmt, show=show, rows=len(recipients))
+
+    if fmt == "xlsx":
+        response = HttpResponse(
+            recipients_xlsx(batch, recipients, stats),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{stem}.xlsx"'
+        return response
+    if fmt == "pdf":
+        response = HttpResponse(content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{stem}-report.pdf"'
+        summary_pdf(response, batch, stats, recipients, _failure_rows(batch.messages.all()), exported_by=request.user)
+        return response
+    flash.error(request, "That export format is not available.")
+    return redirect("reporting:bulk_send", pk=batch.pk)
+
+
+@login_required
+@require_POST
+def bulk_send_resend(request, pk):
+    """Send the same message again to everyone in one status group, as a new batch."""
+    from apps.library.bulk import start_bulk_send
+    from apps.library.event_templates import sendable_on
+    from apps.library.tasks import run_bulk_resend
+
+    if request.workspace is None:
+        return redirect("workspaces:list")
+    require_right(request, "send_bulk")
+    batch = scoped_get_or_404(BulkSend, request, pk=pk)
+    group = request.POST.get("group") or ""
+    if group not in RESEND_GROUPS:
+        flash.error(request, "Choose who to resend to.")
+        return redirect("reporting:bulk_send", pk=batch.pk)
+    label, statuses = RESEND_GROUPS[group]
+
+    if batch.template is None or not batch.template.is_usable:
+        flash.error(request, "That message is no longer approved, so it cannot be sent again.")
+        return redirect("reporting:bulk_send", pk=batch.pk)
+    allowed, reason = sendable_on(batch.template.name)
+    if not allowed:
+        flash.error(request, reason)
+        return redirect("reporting:bulk_send", pk=batch.pk)
+
+    contact_ids = list(
+        batch.messages.filter(wa_status__in=statuses)
+        .exclude(conversation__contact__opted_out_at__isnull=False)
+        .values_list("conversation__contact_id", flat=True)
+        .distinct()
+    )
+    if not contact_ids:
+        flash.error(request, f"Nobody is {label} on this send.")
+        return redirect("reporting:bulk_send", pk=batch.pk)
+
+    class _Named:
+        def __init__(self, name):
+            self.name = name
+
+    new_batch = start_bulk_send(
+        request.workspace, batch.channel, batch.template,
+        [_Named(f"Resend to {label} from send #{batch.pk}")], batch.values,
+        header_media=batch.header_media or None, created_by=request.user, recipient_count=len(contact_ids),
+    )
+    run_bulk_resend.delay(new_batch.pk, contact_ids)
+    audit("bulk_send.resend_queued", request=request, target=batch, group=group, recipients=len(contact_ids))
+    flash.success(request, f"Sending '{batch.template_name}' again to {len(contact_ids)} people who were {label}.")
+    return redirect("reporting:bulk_send", pk=new_batch.pk)

@@ -21,6 +21,10 @@
       <span class="mt-1 flex items-center gap-1 text-[11px]">
         {% if c.assigned_to %}
           <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{{ c.assigned_to.display_name }}</span>
+        {% elif c.status == 'bot' %}
+          <span class="rounded bg-sky-100 px-1.5 py-0.5 text-sky-800">{% if c.last_inbound_at %}Automated{% else %}Sent, no reply yet{% endif %}</span>
+        {% elif c.status == 'waiting' %}
+          <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">Waiting on the customer</span>
         {% else %}
           <span class="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800">Waiting for someone</span>
         {% endif %}

@@ -67,6 +67,36 @@ def run_bulk_send(workspace_id, template_id, audience_ids, values, header_media=
     )
 
 
+@shared_task(name="apps.library.tasks.run_bulk_resend", ignore_result=True)
+def run_bulk_resend(bulk_send_id, contact_ids):
+    """Send an existing batch's message again, to a chosen subset of its people.
+
+    The new batch was recorded when the button was pressed; this just does
+    the sending, with the same template, values and header file as before.
+    """
+    from apps.contacts.models import Contact
+    from apps.core.audit import audit
+    from apps.library.bulk import send_to_contacts
+    from apps.library.models import BulkSend
+
+    bulk_send = BulkSend.objects.select_related("workspace", "channel", "template").filter(pk=bulk_send_id).first()
+    if bulk_send is None or bulk_send.template is None or bulk_send.channel is None:
+        logger.warning("bulk resend dropped: batch=%s", bulk_send_id)
+        _drop(bulk_send)
+        return
+    contacts = list(
+        Contact.objects.for_workspace(bulk_send.workspace).filter(pk__in=contact_ids, is_blocked=False).order_by("pk")
+    )
+    result = send_to_contacts(
+        bulk_send.workspace, bulk_send.channel, bulk_send.template, contacts, bulk_send.values,
+        header_media=bulk_send.header_media or None, bulk_send=bulk_send,
+    )
+    audit(
+        "library.bulk_resend", workspace=bulk_send.workspace, actor_id=bulk_send.created_by_id,
+        target=bulk_send.template, sent=result["sent"], blocked=result["blocked"], failed=result["failed"],
+    )
+
+
 def _drop(bulk_send):
     if bulk_send is not None:
         from apps.library.models import BulkSend

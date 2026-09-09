@@ -115,8 +115,10 @@ def _store_message(channel, payload, profiles):
 
     conversation.touch_inbound(received_at)
     conversation.unread_agent_count = (conversation.unread_agent_count or 0) + 1
-    if conversation.status == Conversation.Status.WAITING:
-        conversation.status = Conversation.Status.ASSIGNED
+    if conversation.status in (Conversation.Status.WAITING, Conversation.Status.ASSIGNED):
+        conversation.status = (
+            Conversation.Status.ASSIGNED if conversation.assigned_to_id else Conversation.Status.QUEUED
+        )
     conversation.save()
 
     kind = payload.get("type", "unsupported")
@@ -159,12 +161,22 @@ def _store_message(channel, payload, profiles):
         # The event journey gets first refusal on everything else. It claims
         # tokens and RSVP answers and leaves anything it does not understand
         # for a person, rather than guessing.
+        claimed = False
         try:
             from apps.events.journey import handle as handle_event
 
-            handle_event(conversation, message)
+            claimed = bool(handle_event(conversation, message))
         except Exception:
             logger.exception("event journey failed conversation=%s", conversation.pk)
+        # A reply the automation did not understand needs a person. Typically
+        # this is someone answering a campaign message in their own words.
+        if not claimed and conversation.status == Conversation.Status.BOT and not conversation.assigned_to_id:
+            conversation.status = Conversation.Status.QUEUED
+            conversation.save(update_fields=["status"])
+        if not is_new and conversation.status == Conversation.Status.QUEUED and not conversation.assigned_to_id:
+            from apps.agents.allocation import auto_assign
+
+            auto_assign(conversation)
 
     events.conversation_changed(conversation, "message")
     return message

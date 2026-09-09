@@ -29,7 +29,12 @@ def _conversations(request, view="open", query=""):
     if view == "mine":
         qs = qs.filter(assigned_to=request.user, status__in=Conversation.OPEN_STATUSES)
     elif view == "unassigned":
-        qs = qs.filter(assigned_to__isnull=True, status__in=Conversation.OPEN_STATUSES)
+        # Chats that need a person: not ones the automation is running, and not
+        # ones where we spoke last and are waiting on the customer.
+        qs = qs.filter(
+            assigned_to__isnull=True,
+            status__in=[Conversation.Status.QUEUED, Conversation.Status.ASSIGNED],
+        )
     elif view == "resolved":
         qs = qs.filter(status__in=[Conversation.Status.RESOLVED, Conversation.Status.CLOSED])
     else:
