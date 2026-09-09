@@ -34,8 +34,6 @@
   <!-- MIDDLE: the conversation -->
   <section class="flex min-w-0 flex-1 flex-col bg-slate-50" :class="pane === 'list' ? 'hidden md:flex' : 'flex'">
     {% if conversation %}
-      {# Only the messages and the header are swapped on a refresh. The composer is left
-         alone so a half-typed reply survives, and the poll covers a dropped websocket. #}
       <div id="thread" hx-get="{% url 'inbox:thread' conversation.pk %}"
            hx-trigger="refresh-thread from:body, every 10s"
            hx-select="#messages" hx-target="#messages" hx-swap="outerHTML"
