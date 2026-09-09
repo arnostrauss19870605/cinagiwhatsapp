@@ -76,7 +76,7 @@ class LoginTests(TestCase):
         response = self.client.post(reverse("accounts:login_code"), {"code": wrong})
         self.assertRedirects(response, reverse("accounts:login"))
         # Even the right code is dead now.
-        self.client.post(reverse("accounts:login"), {"email": "arno@cinagi.co.za"})
+        self._request_code()
         response = self.client.post(reverse("accounts:login_code"), {"code": code})
         self.assertNotIn("_auth_user_id", self.client.session)
 
@@ -230,6 +230,44 @@ class UserAdminTests(TestCase):
         with mock.patch(SEND_WELCOME, return_value=True) as welcome:
             self.client.post(reverse("accounts:user_resend_welcome", args=[self.agent.pk]))
         welcome.assert_called_once()
+
+
+@override_settings(
+    MS_GRAPH_TENANT_ID="t", MS_GRAPH_CLIENT_ID="c", MS_GRAPH_CLIENT_SECRET="s", MS_GRAPH_SENDER="noreply@cinagi.co.za"
+)
+class EmailSafetyTests(TestCase):
+    """Real credentials on a laptop must not turn a test run into real emails."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("arno@cinagi.co.za", "arno@cinagi.co.za", first_name="Arno")
+
+    @override_settings(OUTBOUND_COMMS_MODE="suppress")
+    def test_nothing_is_sent_unless_the_deployment_is_live(self):
+        from apps.accounts import emails
+
+        with mock.patch("apps.integrations.msgraph.GraphClient.send_mail") as send_mail:
+            self.assertFalse(emails.send_login_code(self.user, "123456"))
+            self.assertFalse(emails.send_welcome(self.user, None, []))
+        send_mail.assert_not_called()
+
+    @override_settings(OUTBOUND_COMMS_MODE="live")
+    def test_live_mode_sends_through_graph(self):
+        from apps.accounts import emails
+
+        with mock.patch("apps.integrations.msgraph.GraphClient.send_mail", return_value=True) as send_mail:
+            self.assertTrue(emails.send_login_code(self.user, "123456"))
+        send_mail.assert_called_once()
+        self.assertEqual(send_mail.call_args.args[0], "arno@cinagi.co.za")
+        self.assertIn("123456", send_mail.call_args.args[1])
+
+    @override_settings(OUTBOUND_COMMS_MODE="suppress")
+    def test_the_whole_login_flow_never_reaches_microsoft_outside_live_mode(self):
+        with mock.patch("apps.integrations.msgraph.GraphClient.send_mail") as send_mail, mock.patch(
+            "apps.integrations.msgraph.GraphClient._access_token"
+        ) as token:
+            self.client.post(reverse("accounts:login"), {"email": "arno@cinagi.co.za"})
+        send_mail.assert_not_called()
+        token.assert_not_called()
 
 
 class ComposerPreferenceTests(TestCase):

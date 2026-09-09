@@ -62,6 +62,14 @@ def login_url():
 
 
 def _client():
+    """The Graph client, or None when email must not leave this machine.
+
+    The same rule as the WhatsApp transport: nothing reaches a real inbox
+    unless the deployment is explicitly live. A test suite or a laptop with
+    real credentials in .env must never email a colleague a sign-in code.
+    """
+    if settings.OUTBOUND_COMMS_MODE != "live":
+        return None
     client = GraphClient()
     return client if client.configured else None
 
