@@ -54,12 +54,13 @@ def login_start(request):
 
         user = User.objects.filter(email__iexact=email, is_active=True).first()
         if user is None or not email_domain_allowed(email):
-            audit("login.unknown_email", email=email)
+            audit("login.unknown_email", request=request, email=email)
         elif LoginCode.recent_count(user) >= 3:
             messages.error(request, "That address has asked for several codes already. Wait ten minutes and try again.")
             return redirect("accounts:login")
         else:
             _, code = LoginCode.issue(user)
+            audit("login.code_sent", request=request, email=email)
             try:
                 delivered = emails.send_login_code(user, code)
             except GraphError:
@@ -86,11 +87,11 @@ def login_code(request):
         live = LoginCode.live_for(user) if user else None
         if live is not None and live.verify(form.cleaned_data["code"]):
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-            audit("login.success", actor=user)
+            audit("login.success", request=request, actor=user, email=email)
             destination = request.session.pop(SESSION_NEXT, "") or settings.LOGIN_REDIRECT_URL
             request.session.pop(SESSION_EMAIL, None)
             return redirect(destination)
-        audit("login.bad_code", email=email)
+        audit("login.bad_code", request=request, email=email)
         if live is not None and live.used_at is not None:
             messages.error(request, "Too many wrong guesses. Ask for a new code.")
             return redirect("accounts:login")
