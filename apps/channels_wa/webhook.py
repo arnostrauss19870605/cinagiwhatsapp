@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def _channels_in_payload(payload):
     from apps.channels_wa.models import WhatsAppChannel
 
-    ids = set()
+    ids, wabas = set(), set()
     for entry in payload.get("entry", []) or []:
         for change in entry.get("changes", []) or []:
             phone_number_id = ((change.get("value") or {}).get("metadata") or {}).get(
@@ -31,9 +31,16 @@ def _channels_in_payload(payload):
             )
             if phone_number_id:
                 ids.add(phone_number_id)
-    if not ids:
+            elif entry.get("id"):
+                # Template status and quality events carry no phone number;
+                # the entry id is the WhatsApp Business Account.
+                wabas.add(str(entry["id"]))
+    if not ids and not wabas:
         return []
-    return list(WhatsAppChannel.objects.filter(phone_number_id__in=ids, is_active=True))
+    channels = WhatsAppChannel.objects.filter(is_active=True)
+    from django.db.models import Q
+
+    return list(channels.filter(Q(phone_number_id__in=ids) | Q(waba_id__in=wabas)))
 
 
 def _signature_ok(raw_body, header, channels):

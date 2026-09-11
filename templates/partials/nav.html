@@ -55,6 +55,7 @@
         <a href="{% url 'accounts:users' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Users</a>
       {% endif %}
       {% if membership.can_supervise %}
+        <a href="{% url 'questions:questions' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Questions</a>
         <a href="{% url 'reporting:overview' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Analytics</a>
       {% endif %}
     </nav>

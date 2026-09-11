@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "apps.events",
     "apps.integrations",
     "apps.reporting",
+    "apps.questions",
 ]
 
 MIDDLEWARE = [
@@ -192,6 +193,7 @@ CELERY_TASK_ROUTES = {
     "apps.channels_wa.tasks.process_inbound_payload": {"queue": "webhooks"},
     "apps.channels_wa.tasks.send_message": {"queue": "outbound"},
     "apps.channels_wa.tasks.sync_templates": {"queue": "default"},
+    "apps.channels_wa.tasks.poll_template_statuses": {"queue": "default"},
     "apps.channels_wa.tasks.alert_pending_chats": {"queue": "default"},
     "apps.events.tasks.send_rsvp_confirmation": {"queue": "outbound"},
     "apps.library.tasks.run_bulk_send": {"queue": "outbound"},
@@ -227,6 +229,9 @@ else:
 # --- WhatsApp / outbound safety --------------------------------------------
 
 WHATSAPP_GRAPH_VERSION = env("WHATSAPP_GRAPH_VERSION", "v21.0")
+# The Meta app the numbers belong to. Needed to upload a sample file when a
+# template with a media header is submitted for review.
+WHATSAPP_APP_ID = env("WHATSAPP_APP_ID")
 WHATSAPP_TIMEOUT = int(env("WHATSAPP_TIMEOUT", "30"))
 # suppress | allowlist | live  - see apps/channels_wa/comms_guard.py
 OUTBOUND_COMMS_MODE = env("OUTBOUND_COMMS_MODE", "suppress" if DEBUG else "live")

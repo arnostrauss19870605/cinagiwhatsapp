@@ -10,11 +10,12 @@ PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 
 
 class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
-    """A Meta-approved template. Read only here - authored in WhatsApp Manager.
+    """A template as Meta knows it: the source of truth for what may be sent.
 
-    We never create or edit templates through this app; we sync what Meta has
-    approved and validate before sending. That avoids the whole class of
-    "why was my template rejected" support tickets.
+    Rows arrive two ways - synced from WhatsApp Manager, or created when a
+    TemplateDraft written in the app is submitted. Either way the components
+    here are what Meta approved, in Meta's positional form, and status follows
+    Meta's verdicts through the webhook and the poll.
     """
 
     class Category(models.TextChoices):
@@ -41,6 +42,14 @@ class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     components = models.JSONField(default=list, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
+    status_changed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(
+        blank=True, help_text="Meta's explanation when a template is rejected, paused or disabled."
+    )
+    quality = models.CharField(
+        max_length=12, blank=True,
+        help_text="Meta's quality rating from customer feedback: GREEN, YELLOW or RED.",
+    )
 
     class Meta:
         ordering = ("name",)
@@ -56,6 +65,31 @@ class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
     @property
     def is_usable(self):
         return self.status == self.Status.APPROVED
+
+    @property
+    def quality_label(self):
+        return {"GREEN": "Good", "YELLOW": "Watch", "RED": "Poor"}.get(self.quality, "")
+
+    @property
+    def variable_map(self):
+        """Named variables from the draft this was authored from, or None if synced from Manager."""
+        draft = self.drafts.exclude(variables=[]).order_by("-version", "-pk").first()
+        return draft.variables if draft else None
+
+    @property
+    def manual_variables(self):
+        return [v for v in (self.variable_map or []) if v.get("source") == "manual"]
+
+    @property
+    def quick_reply_labels(self):
+        """The quick-reply button texts, in order, or [] for a template without any."""
+        for component in self.components or []:
+            if component.get("type", "").upper() == "BUTTONS":
+                return [
+                    b.get("text", "") for b in component.get("buttons", [])
+                    if b.get("type", "").upper() == "QUICK_REPLY"
+                ]
+        return []
 
     @property
     def body_text(self):
@@ -122,6 +156,96 @@ class MessageTemplate(WorkspaceScopedModel, TimeStampedModel):
         return components
 
 
+def template_sample_path(instance, filename):
+    return f"template_samples/{instance.workspace_id}/{filename}"
+
+
+class TemplateDraft(WorkspaceScopedModel, TimeStampedModel):
+    """A template written in the app, on its way to Meta.
+
+    Editable until it is submitted. After that it is a record of what was
+    sent for review, and any change means a new version with a new name,
+    because Meta's edit rules (one per day, re-review) make in-place edits
+    a trap.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SUBMITTING = "submitting", "Submitting"
+        SUBMITTED = "submitted", "Submitted to Meta"
+        ERROR = "error", "Submission failed"
+
+    class HeaderType(models.TextChoices):
+        NONE = "none", "No header"
+        TEXT = "text", "Text"
+        IMAGE = "image", "Image"
+        VIDEO = "video", "Video"
+        DOCUMENT = "document", "Document (PDF)"
+
+    channel = models.ForeignKey(
+        "channels_wa.WhatsAppChannel", on_delete=models.PROTECT, related_name="template_drafts"
+    )
+    internal_title = models.CharField(max_length=120, help_text="How the team refers to it.")
+    name = models.CharField(max_length=512, help_text="Meta's name: lowercase letters, numbers and underscores.")
+    language = models.CharField(max_length=12, default="en")
+    category = models.CharField(max_length=20, choices=MessageTemplate.Category.choices, default=MessageTemplate.Category.MARKETING)
+    header_type = models.CharField(max_length=10, choices=HeaderType.choices, default=HeaderType.NONE)
+    header_text = models.CharField(max_length=60, blank=True)
+    header_sample = models.FileField(upload_to=template_sample_path, blank=True, null=True)
+    body = models.TextField(help_text="Use {{first_name}} and similar placeholders.")
+    footer = models.CharField(max_length=60, blank=True)
+    buttons = models.JSONField(default=list, blank=True)
+    variables = models.JSONField(default=list, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT)
+    template = models.ForeignKey(
+        MessageTemplate, null=True, blank=True, on_delete=models.SET_NULL, related_name="drafts"
+    )
+    meta_template_id = models.CharField(max_length=64, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    last_request = models.JSONField(default=dict, blank=True)
+    last_response = models.JSONField(default=dict, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveSmallIntegerField(default=1)
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="versions")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ("-updated_at",)
+        constraints = [
+            models.UniqueConstraint(fields=["channel", "name", "language"], name="uniq_draft_per_channel")
+        ]
+
+    def __str__(self):
+        return f"{self.internal_title} ({self.name} v{self.version})"
+
+    @property
+    def editable(self):
+        return self.status in (self.Status.DRAFT, self.Status.ERROR)
+
+    @property
+    def meta_status(self):
+        """What Meta thinks, once submitted; before that, our own status."""
+        if self.template_id:
+            return self.template.status
+        return ""
+
+    @property
+    def status_label(self):
+        if self.template_id:
+            label = self.template.get_status_display()
+            return label
+        return self.get_status_display()
+
+    @property
+    def problem(self):
+        if self.template_id and self.template.rejection_reason:
+            return self.template.rejection_reason
+        return self.rejection_reason
+
+
 class BulkSend(WorkspaceScopedModel, TimeStampedModel):
     """One press of the bulk-send button, and what became of it.
 
@@ -168,6 +292,12 @@ class BulkSend(WorkspaceScopedModel, TimeStampedModel):
     @property
     def audience_label(self):
         return ", ".join(self.audience_names) or "No audience"
+
+    @property
+    def values_label(self):
+        if isinstance(self.values, dict):
+            return " · ".join(f"{k}: {v}" for k, v in self.values.items())
+        return " · ".join(str(v) for v in (self.values or []))
 
 
 class QuickSnippet(WorkspaceScopedModel, TimeStampedModel):

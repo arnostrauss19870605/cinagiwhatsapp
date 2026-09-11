@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}{% if draft.pk %}{{ draft.internal_title }}{% else %}New template{% endif %}{% endblock %}
+{% block content %}
+
+<a href="{% url 'library:templates' %}" class="text-sm text-slate-500 hover:text-[#0065A9]">← Templates</a>
+<div class="mt-3 flex flex-wrap items-start justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-semibold text-slate-900">{% if draft.pk %}{{ draft.internal_title }}{% else %}New template{% endif %}</h1>
+    <p class="mt-1 text-sm text-slate-500">
+      {% if draft.editable %}Write the message, add buttons if you want replies, then send it to Meta for approval.{% else %}Submitted to Meta{% if draft.submitted_at %} on {{ draft.submitted_at|date:"j F H:i" }}{% endif %}. It cannot be changed; make a new version instead.{% endif %}
+    </p>
+  </div>
+  {% if draft.pk %}
+    <div class="flex items-center gap-2">
+      <span class="rounded-full px-3 py-1 text-xs font-semibold
+        {% if draft.meta_status == 'APPROVED' %}bg-[#76BD4C]/15 text-[#3d7a1e]{% elif draft.meta_status == 'REJECTED' or draft.status == 'error' %}bg-rose-100 text-rose-800{% elif draft.meta_status == 'PENDING' %}bg-amber-100 text-amber-800{% else %}bg-slate-100 text-slate-600{% endif %}">{{ draft.status_label }}</span>
+      {% if not draft.editable %}
+        <form method="post" action="{% url 'library:draft_clone' draft.pk %}">{% csrf_token %}<button class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50">New version</button></form>
+      {% else %}
+        <form method="post" action="{% url 'library:draft_delete' draft.pk %}">{% csrf_token %}<button class="rounded-xl border border-rose-200 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50">Delete draft</button></form>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% if draft.problem %}<p class="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-rose-200">Meta said: {{ draft.problem }}</p>{% endif %}
+
+{{ draft.buttons|json_script:"draft-buttons" }}
+<form method="post" enctype="multipart/form-data" class="mt-6 grid gap-6 lg:grid-cols-5"
+      x-data="templateEditor()" x-init="init()">
+  {% csrf_token %}
+
+  <div class="space-y-5 lg:col-span-3">
+    <div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
+      <h2 class="text-sm font-semibold text-slate-900">About this template</h2>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm font-medium text-slate-700 sm:col-span-2">Name for the team
+          <input name="internal_title" value="{{ draft.internal_title }}" required {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#0065A9] focus:outline-none focus:ring-1 focus:ring-[#0065A9]">
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Meta name
+          <input name="name" value="{{ draft.name }}" required pattern="[a-z0-9_]+" placeholder="e.g. quiz_exercise" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          <span class="mt-1 block text-xs font-normal text-slate-500">Lowercase, numbers and underscores. Cannot change after submission.</span>
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Language code
+          <input name="language" value="{{ draft.language }}" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          <span class="mt-1 block text-xs font-normal text-slate-500">Must match exactly at send time: en, not en_US, unless you mean en_US.</span>
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Number
+          <select name="channel" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            {% for c in channels %}<option value="{{ c.pk }}" {% if draft.channel_id == c.pk %}selected{% endif %}>{{ c.display_name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Category
+          <select name="category" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            {% for value, label in categories %}{% if value != 'AUTHENTICATION' %}<option value="{{ value }}" {% if draft.category == value %}selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}
+          </select>
+          <span class="mt-1 block text-xs font-normal text-slate-500">Anything promotional, including a prize draw, is Marketing. Meta rejects a Utility template that reads like marketing.</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
+      <h2 class="text-sm font-semibold text-slate-900">The message</h2>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm font-medium text-slate-700">Header
+          <select name="header_type" x-model="headerType" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            {% for value, label in header_types %}<option value="{{ value }}" {% if draft.header_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="block text-sm font-medium text-slate-700" x-show="headerType === 'text'">Header text
+          <input name="header_text" x-model="headerText" value="{{ draft.header_text }}" maxlength="60" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        </label>
+        <label class="block text-sm font-medium text-slate-700" x-show="['image','video','document'].includes(headerType)">Sample file for Meta's review
+          <input type="file" name="header_sample" {% if not draft.editable %}disabled{% endif %} class="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0065A9]/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#0065A9]">
+          {% if draft.header_sample %}<span class="mt-1 block text-xs font-normal text-slate-500">Current: {{ draft.header_sample.name|cut:"template_samples/" }}</span>{% endif %}
+          <span class="mt-1 block text-xs font-normal text-slate-500">The real file is chosen each time you send.</span>
+        </label>
+      </div>
+      <label class="block text-sm font-medium text-slate-700">Message
+        <textarea name="body" x-model="body" rows="8" maxlength="1024" required {% if not draft.editable %}disabled{% endif %}
+                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm leading-relaxed focus:border-[#0065A9] focus:outline-none focus:ring-1 focus:ring-[#0065A9]"
+                  placeholder="Hi {% templatetag openvariable %}first_name{% templatetag closevariable %}, ...">{{ draft.body }}</textarea>
+        <span class="mt-1 flex justify-between text-xs font-normal text-slate-500">
+          <span>Use placeholders like {% templatetag openvariable %}first_name{% templatetag closevariable %} or {% templatetag openvariable %}policy_number{% templatetag closevariable %}. Save to configure them below.</span>
+          <span x-text="body.length + ' / 1024'"></span>
+        </span>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">Footer (optional)
+        <input name="footer" x-model="footer" value="{{ draft.footer }}" maxlength="60" {% if not draft.editable %}disabled{% endif %} placeholder="Reply AGENT any time to talk to a person." class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </label>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-6">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-900">Buttons</h2>
+        {% if draft.editable %}
+          <div class="flex gap-1 text-xs">
+            <button type="button" @click="addButton('quick_reply')" class="rounded-lg border border-slate-300 px-2.5 py-1 hover:bg-slate-50">+ Reply button</button>
+            <button type="button" @click="addButton('url')" class="rounded-lg border border-slate-300 px-2.5 py-1 hover:bg-slate-50">+ Link</button>
+            <button type="button" @click="addButton('phone')" class="rounded-lg border border-slate-300 px-2.5 py-1 hover:bg-slate-50">+ Call</button>
+          </div>
+        {% endif %}
+      </div>
+      <p class="mt-1 text-xs text-slate-500">Reply buttons are how a question gets answered. Up to 25 characters each.</p>
+      <div class="mt-3 space-y-2">
+        <template x-for="(b, i) in buttons" :key="i">
+          <div class="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200">
+            <input type="hidden" name="button_type" :value="b.type">
+            <span class="w-16 text-xs font-medium text-slate-500" x-text="{quick_reply:'Reply', url:'Link', phone:'Call'}[b.type]"></span>
+            <input name="button_text" x-model="b.text" maxlength="25" placeholder="Button label" {% if not draft.editable %}disabled{% endif %} class="w-44 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <input name="button_url" x-model="b.url" x-show="b.type === 'url'" placeholder="https://…" {% if not draft.editable %}disabled{% endif %} class="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <input name="button_phone" x-model="b.phone" x-show="b.type === 'phone'" placeholder="+27…" {% if not draft.editable %}disabled{% endif %} class="w-40 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            {% if draft.editable %}<button type="button" @click="buttons.splice(i, 1)" class="ml-auto text-xs text-slate-400 hover:text-rose-600">Remove</button>{% endif %}
+          </div>
+        </template>
+        <p x-show="!buttons.length" class="text-sm text-slate-400">No buttons.</p>
+      </div>
+    </div>
+
+    {% if draft.variables %}
+      <div class="rounded-2xl border border-slate-200 bg-white p-6">
+        <h2 class="text-sm font-semibold text-slate-900">Placeholders</h2>
+        <p class="mt-1 text-xs text-slate-500">Where each blank gets its value when you send. The sample is what Meta sees during review, so make it realistic.</p>
+        <div class="mt-3 divide-y divide-slate-100">
+          {% for v in draft.variables %}
+            <div class="grid gap-3 py-4 sm:grid-cols-12 sm:items-end">
+              <input type="hidden" name="var_{{ v.key }}_present" value="1">
+              <div class="sm:col-span-2"><span class="block text-xs font-medium text-slate-500">Placeholder</span><code class="mt-1 block rounded-lg bg-slate-50 px-2 py-2 text-xs ring-1 ring-slate-200">{% templatetag openvariable %}{{ v.key }}{% templatetag closevariable %}</code></div>
+              <label class="block sm:col-span-2"><span class="text-xs font-medium text-slate-500">Label</span><input name="var_{{ v.key }}_label" value="{{ v.label }}" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"></label>
+              <label class="block sm:col-span-3"><span class="text-xs font-medium text-slate-500">Filled from</span>
+                <select name="var_{{ v.key }}_source" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
+                  {% for value, label in sources %}<option value="{{ value }}" {% if v.source == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+              </label>
+              <label class="block sm:col-span-2"><span class="text-xs font-medium text-slate-500">Detail key / fallback</span>
+                <input name="var_{{ v.key }}_attribute" value="{{ v.attribute }}" placeholder="attribute" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
+                <input name="var_{{ v.key }}_fallback" value="{{ v.fallback }}" placeholder="fallback" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
+              </label>
+              <label class="block sm:col-span-2"><span class="text-xs font-medium text-slate-500">Sample</span><input name="var_{{ v.key }}_sample" value="{{ v.sample }}" x-model="samples['{{ v.key }}']" {% if not draft.editable %}disabled{% endif %} class="mt-1 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"></label>
+              <label class="flex items-center gap-1.5 pb-2 text-xs text-slate-600 sm:col-span-1"><input type="checkbox" name="var_{{ v.key }}_required" {% if v.required %}checked{% endif %} {% if not draft.editable %}disabled{% endif %} class="h-4 w-4 rounded border-slate-300">Required</label>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if draft.editable %}
+      {% if problems %}
+        <div class="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+          <p class="font-medium">Before this can go to Meta:</p>
+          <ul class="mt-1 list-disc pl-5">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      <div class="flex flex-wrap items-center gap-3">
+        <button name="action" value="save" class="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-medium hover:bg-slate-50">Save draft</button>
+        <button name="action" value="submit" {% if problems or not draft.pk %}disabled{% endif %} class="rounded-xl bg-[#0065A9] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490] disabled:cursor-not-allowed disabled:opacity-50">Send to Meta for approval</button>
+        {% if not draft.pk %}<span class="text-xs text-slate-500">Save first, then configure placeholders and submit.</span>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="lg:col-span-2">
+    <div class="sticky top-20 space-y-4">
+      <div class="rounded-[2rem] bg-slate-900 p-3 shadow-xl">
+        <div class="rounded-[1.6rem] bg-[#e5ddd5] p-3" style="background-image: radial-gradient(#d9d2c8 0.6px, transparent 0.6px); background-size: 12px 12px;">
+          <div class="mb-3 rounded-lg bg-[#075e54] px-3 py-2 text-xs font-medium text-white">{{ draft.channel.display_name|default:"Cinagi" }}</div>
+          <div class="max-w-[92%] rounded-xl rounded-tl-sm bg-white p-2.5 text-[13px] leading-snug text-slate-900 shadow">
+            <template x-if="headerType === 'text' && headerText"><p class="mb-1 font-semibold" x-text="headerText"></p></template>
+            <template x-if="['image','video','document'].includes(headerType)"><div class="mb-2 flex h-24 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-500" x-text="headerType === 'document' ? 'PDF attachment' : headerType.charAt(0).toUpperCase() + headerType.slice(1)"></div></template>
+            <p class="whitespace-pre-wrap" x-text="rendered()"></p>
+            <p class="mt-1 text-[11px] text-slate-500" x-show="footer" x-text="footer"></p>
+            <p class="mt-1 text-right text-[10px] text-slate-400">10:24</p>
+          </div>
+          <template x-for="(b, i) in buttons" :key="'p'+i">
+            <div class="mt-1 max-w-[92%] rounded-xl bg-white py-2 text-center text-[13px] font-medium text-[#00a5f4] shadow" x-text="b.text || '…'"></div>
+          </template>
+        </div>
+      </div>
+
+      {% if draft.variables %}
+        <form method="get" class="rounded-2xl border border-slate-200 bg-white p-4">
+          <label class="block text-xs font-medium text-slate-500">Preview for a real person</label>
+          <div class="mt-1 flex gap-2">
+            <input name="preview_q" value="{{ preview_q }}" placeholder="Name or number" class="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+            <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Show</button>
+          </div>
+          {% if preview_q and not preview_contact %}<p class="mt-2 text-xs text-slate-500">Nobody matches that.</p>{% endif %}
+          {% if preview_text %}<p class="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-800 ring-1 ring-slate-200">{{ preview_text }}</p><p class="mt-1 text-xs text-slate-500">As {{ preview_contact.name }} would see it.</p>{% endif %}
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</form>
+
+<script>
+  function templateEditor() {
+    return {
+      headerType: '{{ draft.header_type|default:"none" }}',
+      headerText: '', body: '', footer: '', buttons: [], samples: {},
+      init() {
+        this.body = this.$root.querySelector('textarea[name=body]').value;
+        this.footer = this.$root.querySelector('input[name=footer]').value;
+        this.headerText = this.$root.querySelector('input[name=header_text]').value;
+        try { this.buttons = JSON.parse(document.getElementById('draft-buttons').textContent) || []; } catch (e) { this.buttons = []; }
+        this.$root.querySelectorAll('input[name$=_sample]').forEach(function (input) {
+          var key = input.name.slice(4, -7);
+          this.samples[key] = input.value;
+        }, this);
+      },
+      addButton(type) { if (this.buttons.length < 10) { this.buttons.push({type: type, text: '', url: '', phone: ''}); } },
+      rendered() {
+        var samples = this.samples;
+        return (this.body || 'Your message appears here.').replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, function (m, key) {
+          return samples[key] || ('[' + key + ']');
+        });
+      }
+    };
+  }
+</script>
+{% endblock %}

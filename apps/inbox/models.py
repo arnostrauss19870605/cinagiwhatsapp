@@ -171,6 +171,7 @@ class Message(WorkspaceScopedModel):
         LOCATION = "location", "Location"
         CONTACTS = "contacts", "Contact card"
         INTERACTIVE = "interactive", "Menu reply"
+        BUTTON = "button", "Button tap"
         TEMPLATE = "template", "Template"
         UNSUPPORTED = "unsupported", "Unsupported"
 

@@ -11,7 +11,7 @@
     <p class="mt-2 text-sm text-sky-100">
       To {{ batch.audience_label }} · {{ batch.created_at|date:"l j F, H:i" }}{% if batch.created_by %} · started by {{ batch.created_by.display_name }}{% endif %}
     </p>
-    {% if batch.values %}<p class="mt-1 text-xs text-sky-200">Values: {{ batch.values|join:" · " }}</p>{% endif %}
+    {% if batch.values %}<p class="mt-1 text-xs text-sky-200">Values: {{ batch.values_label }}</p>{% endif %}
   </div>
   <div class="flex flex-wrap items-center gap-2">
     <a href="{% url 'reporting:bulk_send_export' batch.pk 'xlsx' %}{% if show != 'all' %}?show={{ show }}{% endif %}" class="rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">Excel{% if show != 'all' %} (filtered){% endif %}</a>

@@ -158,16 +158,20 @@ def _store_message(channel, payload, profiles):
     elif _wants_a_human(message.body):
         _escalate_to_human(conversation, message)
     else:
-        # The event journey gets first refusal on everything else. It claims
-        # tokens and RSVP answers and leaves anything it does not understand
-        # for a person, rather than guessing.
-        claimed = False
-        try:
-            from apps.events.journey import handle as handle_event
+        # A tap on a question's button is an answer, tied to the message it
+        # replied to. Then the event journey gets first refusal on the rest:
+        # it claims tokens and RSVP answers and leaves anything it does not
+        # understand for a person, rather than guessing.
+        from apps.questions.answers import record_answer
 
-            claimed = bool(handle_event(conversation, message))
-        except Exception:
-            logger.exception("event journey failed conversation=%s", conversation.pk)
+        claimed = record_answer(conversation, message) is not None
+        if not claimed:
+            try:
+                from apps.events.journey import handle as handle_event
+
+                claimed = bool(handle_event(conversation, message))
+            except Exception:
+                logger.exception("event journey failed conversation=%s", conversation.pk)
         # A reply the automation did not understand needs a person. Typically
         # this is someone answering a campaign message in their own words.
         if not claimed and conversation.status == Conversation.Status.BOT and not conversation.assigned_to_id:

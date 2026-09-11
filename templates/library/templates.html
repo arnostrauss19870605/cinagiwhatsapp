@@ -4,14 +4,15 @@
 <div class="hero flex flex-wrap items-center justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
   <div>
     <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Message library</p>
-    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Approved templates</h1>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Templates</h1>
     <p class="mt-2 max-w-2xl text-sm text-sky-100">
-      These come from WhatsApp Manager - you write and submit them there, and Meta approves them.
-      You need one of these to message a customer who has not written to you in the last 24 hours.
+      Write a template here and send it to Meta for approval, or keep using WhatsApp Manager - both end up in this list.
+      You need an approved template to message someone who has not written to you in the last 24 hours.
     </p>
   </div>
   {% if membership.can_manage %}
     <div class="flex gap-2">
+      <a href="{% url 'library:draft_create' %}" class="rounded-xl bg-white px-5 py-2 text-sm font-semibold text-[#0065A9] shadow transition hover:bg-sky-50">+ New template</a>
       {% for channel in channels %}
         <a href="{% url 'channels_wa:sync_templates' channel.pk %}"
            class="rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">
@@ -22,7 +23,36 @@
   {% endif %}
 </div>
 
-<div class="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+{% if drafts %}
+<h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Written here</h2>
+<div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+  <table class="min-w-full text-sm">
+    <thead class="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+      <tr><th class="px-5 py-3">Template</th><th class="px-5 py-3">Meta name</th><th class="px-5 py-3">Status</th><th class="px-5 py-3">Last change</th><th class="px-5 py-3"></th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for d in drafts %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-5 py-3"><a href="{% url 'library:draft_edit' d.pk %}" class="font-medium text-slate-900 hover:text-[#0065A9]">{{ d.internal_title }}</a>{% if d.version > 1 %} <span class="text-xs text-slate-400">v{{ d.version }}</span>{% endif %}</td>
+          <td class="num px-5 py-3 text-xs text-slate-500">{{ d.name }}</td>
+          <td class="px-5 py-3">
+            <span class="rounded-full px-2.5 py-1 text-xs font-semibold
+              {% if d.meta_status == 'APPROVED' %}bg-[#76BD4C]/15 text-[#3d7a1e]
+              {% elif d.meta_status == 'REJECTED' or d.status == 'error' %}bg-rose-100 text-rose-800
+              {% elif d.meta_status == 'PENDING' or d.status == 'submitting' %}bg-amber-100 text-amber-800
+              {% else %}bg-slate-100 text-slate-600{% endif %}">{{ d.status_label }}</span>
+            {% if d.problem %}<p class="mt-1 max-w-xs text-xs text-rose-700">{{ d.problem }}</p>{% endif %}
+          </td>
+          <td class="px-5 py-3 text-xs text-slate-500">{{ d.updated_at|timesince }} ago{% if d.created_by %} · {{ d.created_by.display_name }}{% endif %}</td>
+          <td class="px-5 py-3 text-right text-xs"><a href="{% url 'library:draft_edit' d.pk %}" class="text-[#0065A9] hover:underline">{% if d.editable %}Edit{% else %}View{% endif %}</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">All templates on WhatsApp</h2>
+{% endif %}
+<div class="mt-3 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
   <table class="w-full text-sm">
     <thead class="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
       <tr><th class="px-5 py-3.5">Name</th><th class="px-5 py-3.5">Language</th><th class="px-5 py-3.5">Type</th>
@@ -38,7 +68,15 @@
             <span class="rounded-full px-2.5 py-1 text-xs font-semibold
               {% if t.status == 'APPROVED' %}bg-[#76BD4C]/15 text-[#3d7a1e]
               {% elif t.status == 'REJECTED' %}bg-rose-100 text-rose-800
+              {% elif t.status == 'PAUSED' or t.status == 'DISABLED' %}bg-amber-100 text-amber-800
               {% else %}bg-slate-100 text-slate-600{% endif %}">{{ t.get_status_display }}</span>
+            {% if t.quality %}
+              <span class="ml-1 rounded-full px-2 py-0.5 text-[11px] font-medium
+                {% if t.quality == 'GREEN' %}bg-emerald-50 text-emerald-700{% elif t.quality == 'YELLOW' %}bg-amber-50 text-amber-700{% else %}bg-rose-50 text-rose-700{% endif %}"
+                title="Meta's quality rating from how customers react to this message">Quality: {{ t.quality_label }}</span>
+            {% endif %}
+            {% if t.rejection_reason %}<p class="mt-1 max-w-xs text-xs text-rose-700">{{ t.rejection_reason }}</p>{% endif %}
+            {% if t.status_changed_at %}<p class="mt-0.5 text-[11px] text-slate-400">{{ t.status_changed_at|timesince }} ago</p>{% endif %}
           </td>
           <td class="px-5 py-3 text-slate-600">{{ t.body_text|truncatechars:80 }}</td>
         </tr>

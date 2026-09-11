@@ -86,7 +86,10 @@ run that or expect the server to hit "permission denied".
 - A URL-button suffix containing `:` is silently dropped by WhatsApp; base64url-wrap tokens.
 - Free text is only allowed within 24 hours of the customer's last message; after that, an approved
   template is the only way through. Enforced in `Conversation.window_open` and the composer.
-- Templates are authored in WhatsApp Manager. This app never creates or edits them.
+- Templates can be written in the app (Templates → New template → `TemplateDraft`) or in WhatsApp
+  Manager. Either way `MessageTemplate` holds what Meta approved, in Meta's positional form, and its
+  status follows Meta through the status webhook with the 10-minute poll as backup. An approved
+  template is never edited in place: a change is a new version with a new name.
 
 ## Not built yet (by design)
 

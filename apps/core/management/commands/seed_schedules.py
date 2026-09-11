@@ -14,6 +14,9 @@ class Command(BaseCommand):
         every_minute, _ = IntervalSchedule.objects.get_or_create(
             every=1, period=IntervalSchedule.MINUTES
         )
+        every_ten_minutes, _ = IntervalSchedule.objects.get_or_create(
+            every=10, period=IntervalSchedule.MINUTES
+        )
         nightly, _ = CrontabSchedule.objects.get_or_create(
             minute="15", hour="2", day_of_week="*", day_of_month="*", month_of_year="*"
         )
@@ -31,6 +34,14 @@ class Command(BaseCommand):
             defaults={
                 "interval": every_minute,
                 "task": "apps.channels_wa.tasks.alert_pending_chats",
+                "queue": "default",
+            },
+        )
+        PeriodicTask.objects.update_or_create(
+            name="Check WhatsApp for template approvals",
+            defaults={
+                "interval": every_ten_minutes,
+                "task": "apps.channels_wa.tasks.poll_template_statuses",
                 "queue": "default",
             },
         )

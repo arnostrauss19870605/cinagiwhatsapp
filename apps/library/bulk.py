@@ -12,6 +12,7 @@ import time
 
 from apps.channels_wa.outbound import send_template
 from apps.inbox.models import Conversation, Message
+from apps.library.drafts import values_for
 
 
 def first_name_of(contact):
@@ -53,7 +54,7 @@ def start_bulk_send(workspace, channel, template, audiences, values, *,
         template=template,
         template_name=template.name,
         audience_names=[a.name for a in audiences],
-        values=list(values),
+        values=values if isinstance(values, dict) else list(values),
         header_media=header_media or {},
         created_by_id=created_by.pk if created_by is not None else created_by_id,
         recipient_count=recipient_count,
@@ -91,10 +92,23 @@ def send_to_contacts(workspace, channel, template, contacts, values, *,
                 contact=contact,
                 status=Conversation.Status.BOT,
             )
+        try:
+            resolved = values_for(template, contact, values)
+        except ValueError as exc:
+            message = Message.objects.create(
+                workspace=workspace, conversation=conversation, direction=Message.Direction.OUT,
+                actor=Message.Actor.BOT, kind=Message.Kind.TEMPLATE, template=template,
+                body=template.preview([]), wa_status=Message.Status.BLOCKED,
+                wa_error={"reason": f"Not sent: {exc} for {contact.name}."},
+                bulk_send=bulk_send,
+            )
+            blocked += 1
+            notes.append(f"{contact.name}: {exc}")
+            continue
         message = send_template(
             conversation,
             template,
-            [first_name_of(contact), *values],
+            resolved,
             header_media=header_media,
             actor=Message.Actor.BOT,
         )

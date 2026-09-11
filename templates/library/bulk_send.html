@@ -50,8 +50,22 @@
 
   <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
     <label class="block text-sm font-semibold text-slate-900">2. Fill in the message</label>
-    <p class="mt-1 text-xs text-slate-500">The first blank, {% templatetag openvariable %}1{% templatetag closevariable %}, becomes each person's first name automatically.</p>
+    {% if named %}
+      <p class="mt-1 text-xs text-slate-500">
+        {% if auto_variables %}Filled in per person automatically: {% for v in auto_variables %}<span class="font-medium">{{ v.label }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}.{% endif %}
+        {% if not manual_variables %} Nothing to type in.{% endif %}
+      </p>
+    {% else %}
+      <p class="mt-1 text-xs text-slate-500">The first blank, {% templatetag openvariable %}1{% templatetag closevariable %}, becomes each person's first name automatically.</p>
+    {% endif %}
     <div class="mt-4 grid gap-4 sm:grid-cols-2">
+      {% for v in manual_variables %}
+        <label class="block text-sm font-medium text-slate-700">
+          {{ v.label }}
+          <input name="value_{{ v.key }}" required placeholder="{{ v.sample }}"
+                 class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+        </label>
+      {% endfor %}
       {% for index in value_fields %}
         <label class="block text-sm font-medium text-slate-700">
           Value for {% templatetag openvariable %}{{ index }}{% templatetag closevariable %}
@@ -59,7 +73,7 @@
                  class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
         </label>
       {% endfor %}
-      {% if not value_fields %}
+      {% if not value_fields and not manual_variables and not named %}
         <p class="text-sm text-slate-500 sm:col-span-2">This message has no blanks beyond the first name - nothing to fill in.</p>
       {% endif %}
     </div>

@@ -21,6 +21,7 @@ urlpatterns = [
     path("wa/", include(("apps.channels_wa.urls", "channels_wa"), namespace="channels_wa")),
     path("e/", include(("apps.events.urls", "events"), namespace="events")),
     path("analytics/", include(("apps.reporting.urls", "reporting"), namespace="reporting")),
+    path("questions/", include(("apps.questions.urls", "questions"), namespace="questions")),
 ]
 
 if settings.DEBUG:

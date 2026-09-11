@@ -94,7 +94,7 @@ def _summary_pairs(batch, stats):
         ("Started", _local(batch.started_at or batch.created_at)),
         ("Finished", _local(batch.finished_at)),
         ("Started by", batch.created_by.display_name if batch.created_by else ""),
-        ("Values", " · ".join(str(v) for v in batch.values)),
+        ("Values", batch.values_label),
         ("People", batch.recipient_count),
         ("Sent", stats["sent"]),
         ("Delivered", f"{stats['delivered']} ({stats['delivered_pct']}%)"),
@@ -184,7 +184,7 @@ def summary_pdf(target, batch, stats, messages, failure_rows, *, exported_by=Non
 
     if batch.values:
         story.append(Paragraph("Message values", SECTION))
-        story.append(Paragraph(escape(" · ".join(str(v) for v in batch.values)), BODY))
+        story.append(Paragraph(escape(batch.values_label), BODY))
 
     story.append(Paragraph("Why messages were not delivered", SECTION))
     if failure_rows:
