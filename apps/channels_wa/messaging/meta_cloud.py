@@ -249,6 +249,25 @@ class MetaCloudChannel(MessagingChannel):
         response = self._request("POST", f"{self.base_url}/{template_id}", json=payload)
         return self._safe_json(response)
 
+    def delete_template(self, name, meta_id=""):
+        """Remove a template from the business account.
+
+        With the id, only that language is removed; without it, every language
+        under the name goes. Meta keeps the name reserved for 30 days afterwards.
+        """
+        if not self.channel.waba_id:
+            raise TransportError(
+                "No WhatsApp Business Account ID",
+                friendly="Add the WhatsApp Business Account ID before deleting templates.",
+            )
+        params = {"name": name}
+        if meta_id:
+            params["hsm_id"] = meta_id
+        response = self._request(
+            "DELETE", f"{self.base_url}/{self.channel.waba_id}/message_templates", params=params
+        )
+        return self._safe_json(response)
+
     def upload_sample_media(self, path, app_id, mime_type):
         """Resumable upload, returning the handle a media header needs for review.
 

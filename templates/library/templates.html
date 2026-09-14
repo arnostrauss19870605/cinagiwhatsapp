@@ -95,7 +95,7 @@
   <table class="w-full text-sm">
     <thead class="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
       <tr><th class="px-5 py-3.5">Name</th><th class="px-5 py-3.5">Language</th><th class="px-5 py-3.5">Type</th>
-          <th class="px-5 py-3.5">Status</th><th class="px-5 py-3.5">Message</th></tr>
+          <th class="px-5 py-3.5">Status</th><th class="px-5 py-3.5">Message</th>{% if membership.can_manage %}<th class="px-5 py-3.5"></th>{% endif %}</tr>
     </thead>
     <tbody class="divide-y divide-slate-100">
       {% for t in templates %}
@@ -118,9 +118,20 @@
             {% if t.status_changed_at %}<p class="mt-0.5 text-[11px] text-slate-400">{{ t.status_changed_at|timesince }} ago</p>{% endif %}
           </td>
           <td class="px-5 py-3 text-slate-600">{{ t.body_text|truncatechars:80 }}</td>
+          {% if membership.can_manage %}
+            <td class="px-5 py-3 text-right" x-data="{confirm:false}">
+              <button type="button" @click="confirm=!confirm" class="text-xs text-slate-400 hover:text-rose-600">Delete</button>
+              <div x-show="confirm" x-cloak class="mt-2 w-64 rounded-xl bg-amber-50 p-3 text-left text-xs text-amber-900 ring-1 ring-amber-200">
+                Removes it from WhatsApp too. Sent messages keep their text. The name is locked for 30 days.
+                <form method="post" action="{% url 'library:template_delete' t.pk %}" class="mt-2">{% csrf_token %}
+                  <button class="w-full rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">Yes, delete {{ t.name }}</button>
+                </form>
+              </div>
+            </td>
+          {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="5" class="px-5 py-10 text-center text-slate-500">
+        <tr><td colspan="6" class="px-5 py-10 text-center text-slate-500">
           <p class="font-medium text-slate-700">No templates loaded yet</p>
           <p class="mt-1 text-sm">Once your number is connected, press Refresh from WhatsApp to pull in everything Meta has approved.</p>
         </td></tr>

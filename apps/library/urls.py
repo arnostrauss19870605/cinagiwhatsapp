@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     path("templates/", views.templates, name="templates"),
     path("templates/new/", views.draft_edit, name="draft_create"),
+    path("templates/<int:pk>/delete/", views.template_delete, name="template_delete"),
     path("templates/drafts/<int:pk>/", views.draft_edit, name="draft_edit"),
     path("templates/drafts/<int:pk>/new-version/", views.draft_clone, name="draft_clone"),
     path("templates/drafts/<int:pk>/delete/", views.draft_delete, name="draft_delete"),

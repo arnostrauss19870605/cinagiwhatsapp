@@ -258,6 +258,12 @@ class Message(WorkspaceScopedModel):
             131030: "That number is not in the Meta app's allowed recipient list. That "
             "limit applies while the app is unpublished.",
             132000: "The template's placeholders do not match what Meta approved.",
+            131049: "WhatsApp held this back: this person has had their share of marketing "
+            "messages for now. It clears by itself; a reply from them lifts it sooner.",
+            131050: "This person has told WhatsApp they do not want marketing messages from "
+            "this number.",
+            131053: "The attached file could not be fetched. Check the link or upload the file "
+            "instead.",
             190: "The access token has expired or been revoked. Reconnect the number.",
         }
         error = self.wa_error or {}

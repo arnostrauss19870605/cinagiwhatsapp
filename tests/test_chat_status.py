@@ -123,3 +123,12 @@ class ChatStatusTests(TestCase):
         page = self.client.get(reverse("inbox:conversation", args=[conversation.pk]))
         self.assertContains(page, 'hx-select="#messages"')
         self.assertContains(page, "every 10s")
+
+
+class FailureExplanationTests(TestCase):
+    def test_metas_engagement_throttle_is_explained_in_plain_words(self):
+        from apps.inbox.models import Message
+
+        message = Message(wa_error={"code": 131049, "title": "This message was not delivered to maintain healthy ecosystem engagement."})
+        self.assertIn("their share of marketing messages", message.failure_explanation)
+        self.assertIn("healthy ecosystem", message.failure_explanation)

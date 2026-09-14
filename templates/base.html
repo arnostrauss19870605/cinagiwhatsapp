@@ -50,6 +50,20 @@
 </head>
 <body class="h-full tech-bg text-slate-800 antialiased">
 <script>
+  // The right-hand menu: collapsed to icons or not, remembered per browser.
+  document.addEventListener('alpine:init', function () {
+    var saved = false;
+    try { saved = localStorage.getItem('sidenav.collapsed') === '1'; } catch (e) {}
+    Alpine.store('nav', {
+      collapsed: saved,
+      open: false,
+      toggle: function () {
+        this.collapsed = !this.collapsed;
+        try { localStorage.setItem('sidenav.collapsed', this.collapsed ? '1' : '0'); } catch (e) {}
+      }
+    });
+  });
+
   // HTMX posts need the CSRF token; attach it once, globally.
   document.body.addEventListener('htmx:configRequest', function (event) {
     event.detail.headers['X-CSRFToken'] =
@@ -77,10 +91,15 @@
   </div>
 {% endif %}
 
-<main class="{% block main_class %}mx-auto max-w-6xl px-4 py-8{% endblock %}">
-  {% include "partials/messages.html" %}
-  {% block content %}{% endblock %}
-</main>
+<div class="flex items-start">
+  <div class="min-w-0 flex-1">
+    <main class="{% block main_class %}mx-auto max-w-6xl px-4 py-8{% endblock %}">
+      {% include "partials/messages.html" %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  {% if user.is_authenticated and workspace %}{% include "partials/sidenav.html" %}{% endif %}
+</div>
 
 {% block scripts %}{% endblock %}
 </body>

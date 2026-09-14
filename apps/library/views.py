@@ -30,6 +30,49 @@ def templates(request):
 HEADER_TYPES = TemplateDraft.HeaderType.choices
 
 
+@login_required
+def template_delete(request, pk):
+    """Remove a template from Meta and from here. Past messages keep their text."""
+    from apps.channels_wa.messaging.base import TransportError
+
+    if request.method != "POST":
+        return redirect("library:templates")
+    require_role(request, *WorkspaceMembership.MANAGE_ROLES)
+    template = scoped_get_or_404(MessageTemplate, request, pk=pk)
+
+    if hasattr(template, "question"):
+        flash.error(
+            request,
+            f"'{template.name}' is the message behind the question '{template.question.title}'. "
+            "Delete that question first.",
+        )
+        return redirect("library:templates")
+
+    removed_from_meta = False
+    try:
+        template.channel.client().delete_template(template.name, template.meta_id)
+        removed_from_meta = True
+    except TransportError as exc:
+        body = exc.body if isinstance(exc.body, dict) else {}
+        code = (body.get("error") or {}).get("code")
+        # Already gone on Meta's side: carry on and tidy up here.
+        if code not in (100, 803):
+            flash.error(request, f"Meta would not delete it: {exc.friendly}")
+            return redirect("library:templates")
+
+    name = template.name
+    drafts = template.drafts.count()
+    template.drafts.all().delete()
+    template.delete()
+    audit("template.deleted", request=request, name=name, removed_from_meta=removed_from_meta, drafts=drafts)
+    flash.success(
+        request,
+        f"'{name}' deleted{' from WhatsApp and' if removed_from_meta else ''} from the library. "
+        "WhatsApp keeps the name reserved for 30 days, so a replacement needs a new name.",
+    )
+    return redirect("library:templates")
+
+
 def _read_draft_form(request, draft):
     """Copy the editor's fields onto the draft. Buttons and placeholders come from the body."""
     from apps.library import drafts as drafting

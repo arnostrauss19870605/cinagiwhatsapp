@@ -34,32 +34,6 @@
       </div>
     {% endif %}
 
-    <nav class="ml-2 hidden items-center gap-0.5 text-sm md:flex">
-      <a href="{% url 'inbox:inbox' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Chats</a>
-      <a href="{% url 'contacts:contacts' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Contacts</a>
-      <a href="{% url 'library:snippets' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Quick replies</a>
-      <a href="{% url 'library:templates' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Templates</a>
-      {% if membership.can_manage %}
-        <a href="{% url 'contacts:audiences' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Audiences</a>
-      {% endif %}
-      {% if membership.may_send_bulk %}
-        <a href="{% url 'library:bulk_send' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Bulk send</a>
-      {% endif %}
-      {% if membership.can_manage %}
-        <a href="{% url 'channels_wa:list' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Numbers</a>
-      {% endif %}
-      {% if membership.may_edit_hours %}
-        <a href="{% url 'workspaces:hours' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Hours</a>
-      {% endif %}
-      {% if membership.can_manage or user.is_platform_admin %}
-        <a href="{% url 'accounts:users' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Users</a>
-      {% endif %}
-      {% if membership.can_supervise %}
-        <a href="{% url 'questions:questions' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Questions</a>
-        <a href="{% url 'reporting:overview' %}" class="rounded-lg px-3 py-1.5 text-slate-300 transition hover:bg-white/10 hover:text-white">Analytics</a>
-      {% endif %}
-    </nav>
-
     <div class="ml-auto flex items-center gap-2">
       <div class="relative" x-data="{open:false}" @click.outside="open=false">
         <button @click="open=!open" class="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-1.5 text-sm text-slate-100 transition hover:border-white/30 hover:bg-white/10">
@@ -77,6 +51,11 @@
           </form>
         </div>
       </div>
+      {% if workspace %}
+        <button type="button" x-data @click="$store.nav.open = !$store.nav.open" class="rounded-lg border border-white/15 p-2 text-slate-100 transition hover:bg-white/10 md:hidden" title="Menu">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      {% endif %}
     </div>
   </div>
 </header>
