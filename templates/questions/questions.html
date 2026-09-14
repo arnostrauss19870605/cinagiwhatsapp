@@ -45,7 +45,26 @@
           <td class="num px-5 py-3 text-right">{{ q.people_asked }}</td>
           <td class="num px-5 py-3 text-right">{{ q.answered }}</td>
           <td class="num px-5 py-3 text-right">{{ q.response_rate }}%</td>
-          <td class="px-5 py-3 text-right"><a href="{% url 'questions:question_results' q.pk %}" class="text-[#0065A9] hover:underline">Results</a></td>
+          <td class="px-5 py-3 text-right text-xs">
+            <a href="{% url 'questions:question_results' q.pk %}" class="text-[#0065A9] hover:underline">Results</a>
+            {% if membership.can_manage %}
+              {% if q.answered %}
+                <form method="post" action="{% url 'questions:question_archive' q.pk %}" class="inline">{% csrf_token %}
+                  <button class="ml-3 text-slate-400 hover:text-slate-700" title="Keeps the answers, removes it from this list and the prize draw">Archive</button>
+                </form>
+              {% else %}
+                <span x-data="{confirm:false}">
+                  <button type="button" @click="confirm=!confirm" class="ml-3 text-slate-400 hover:text-rose-600">Delete</button>
+                  <span x-show="confirm" x-cloak class="ml-2 inline-flex items-center gap-2 text-slate-500">
+                    Nobody has answered, so nothing is lost.
+                    <form method="post" action="{% url 'questions:question_delete' q.pk %}" class="inline">{% csrf_token %}
+                      <button class="rounded-lg bg-rose-600 px-2.5 py-1 font-semibold text-white hover:bg-rose-700">Yes, delete</button>
+                    </form>
+                  </span>
+                </span>
+              {% endif %}
+            {% endif %}
+          </td>
         </tr>
       {% empty %}
         <tr><td colspan="7" class="px-5 py-10 text-center text-slate-500">
@@ -56,4 +75,35 @@
     </tbody>
   </table>
 </div>
+
+{% if archived %}
+  <details class="mt-8">
+    <summary class="cursor-pointer select-none text-sm font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700">
+      Archived <span class="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">{{ archived|length }}</span>
+      <span class="ml-2 text-xs font-normal normal-case tracking-normal text-slate-400">Kept for their answers. They do not count towards the prize draw.</span>
+    </summary>
+    <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <table class="min-w-full text-sm text-slate-500">
+        <tbody class="divide-y divide-slate-100">
+          {% for q in archived %}
+            <tr class="hover:bg-slate-50">
+              <td class="px-5 py-3"><a href="{% url 'questions:question_results' q.pk %}" class="font-medium text-slate-700 hover:text-[#0065A9]">{{ q.title }}</a></td>
+              <td class="px-5 py-3 text-slate-500">{{ q.template.name }}</td>
+              <td class="num px-5 py-3 text-right">{{ q.answered }} answer{{ q.answered|pluralize }}</td>
+              <td class="px-5 py-3 text-right text-xs text-slate-400">archived {{ q.archived_at|timesince }} ago</td>
+              <td class="px-5 py-3 text-right text-xs">
+                <a href="{% url 'questions:question_results' q.pk %}" class="text-[#0065A9] hover:underline">Results</a>
+                {% if membership.can_manage %}
+                  <form method="post" action="{% url 'questions:question_archive' q.pk %}" class="inline">{% csrf_token %}
+                    <button class="ml-3 text-slate-400 hover:text-slate-700">Restore</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+{% endif %}
 {% endblock %}

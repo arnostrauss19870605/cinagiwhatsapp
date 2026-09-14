@@ -6,7 +6,7 @@
 
 <div class="hero mt-3 flex flex-wrap items-center justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
   <div>
-    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Question{% if not question.is_active %} · switched off{% endif %}</p>
+    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Question{% if question.is_archived %} · archived{% elif not question.is_active %} · switched off{% endif %}</p>
     <h1 class="mt-1 text-3xl font-semibold tracking-tight">{{ question.title }}</h1>
     <p class="mt-2 max-w-2xl text-sm text-sky-100">{{ question.template.body_text|truncatechars:160 }}</p>
   </div>
@@ -17,6 +17,18 @@
       <form method="post" action="{% url 'questions:question_toggle' question.pk %}">{% csrf_token %}
         <button class="rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">{% if question.is_active %}Switch off{% else %}Switch on{% endif %}</button>
       </form>
+      {% if answered %}
+        <form method="post" action="{% url 'questions:question_archive' question.pk %}">{% csrf_token %}
+          <button class="rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25" title="{% if question.is_archived %}Back into the list and the prize draw{% else %}Keeps the answers, removes it from the list and the prize draw{% endif %}">{% if question.is_archived %}Restore{% else %}Archive{% endif %}</button>
+        </form>
+      {% else %}
+        <div x-data="{confirm:false}" class="flex items-center gap-2">
+          <button type="button" @click="confirm=!confirm" class="rounded-xl bg-white/15 px-4 py-2 text-sm font-medium text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-rose-500/40">Delete</button>
+          <form x-show="confirm" x-cloak method="post" action="{% url 'questions:question_delete' question.pk %}">{% csrf_token %}
+            <button class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-rose-700">Yes, delete it</button>
+          </form>
+        </div>
+      {% endif %}
     {% endif %}
   </div>
 </div>

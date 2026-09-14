@@ -1,8 +1,8 @@
 {% with ns=request.resolver_match.namespace name=request.resolver_match.url_name %}
-{# Right-hand navigation. Collapses to an icon rail; on small screens it is a drawer opened from the header. #}
+{# Left-hand navigation. Collapses to an icon rail; on small screens it is a drawer opened from the header. #}
 <aside x-data
-       class="fixed inset-y-0 right-0 z-40 flex w-64 flex-col border-l border-slate-200 bg-white shadow-xl transition-all duration-200 md:sticky md:top-[3.25rem] md:h-[calc(100vh-3.25rem)] md:translate-x-0 md:shadow-none"
-       :class="{'translate-x-0': $store.nav.open, 'translate-x-full': !$store.nav.open, 'md:w-16': $store.nav.collapsed, 'md:w-60': !$store.nav.collapsed}"
+       class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white shadow-xl transition-all duration-200 md:sticky md:top-[3.25rem] md:h-[calc(100vh-3.25rem)] md:translate-x-0 md:shadow-none"
+       :class="{'translate-x-0': $store.nav.open, '-translate-x-full': !$store.nav.open, 'md:w-16': $store.nav.collapsed, 'md:w-60': !$store.nav.collapsed}"
        @keydown.escape.window="$store.nav.open = false">
 
   <div class="flex h-12 items-center justify-between border-b border-slate-100 px-3">
@@ -11,7 +11,7 @@
       <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
     </button>
     <button type="button" @click="$store.nav.toggle()" class="hidden rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 md:block" :title="$store.nav.collapsed ? 'Expand menu' : 'Collapse menu'">
-      <svg class="h-5 w-5 transition" :class="$store.nav.collapsed && 'rotate-180'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+      <svg class="h-5 w-5 transition" :class="$store.nav.collapsed && 'rotate-180'" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
     </button>
   </div>
 

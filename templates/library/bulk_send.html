@@ -40,6 +40,32 @@
       <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">Message preview</p>
       {{ chosen.body_text|linebreaksbr }}
     </div>
+    {% if has_buttons %}
+      {% if question and question.accepting_answers %}
+        <div class="mt-3 flex items-start gap-3 rounded-xl bg-[#76BD4C]/10 p-4 text-sm text-[#2f5f16] ring-1 ring-[#76BD4C]/40">
+          <svg class="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <p>
+            Button taps on this message count as answers to the question
+            <a href="{% url 'questions:question_results' question.pk %}" class="font-semibold underline">{{ question.title }}</a>{% if question.counts_as_entry %} and earn a prize-draw entry{% endif %}.
+          </p>
+        </div>
+      {% else %}
+        <div class="mt-3 flex items-start gap-3 rounded-xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
+          <svg class="mt-0.5 h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>
+          <p>
+            {% if question %}
+              This message has reply buttons, but its question <a href="{% url 'questions:question_results' question.pk %}" class="font-semibold underline">{{ question.title }}</a>
+              is {% if question.is_archived %}archived{% else %}switched off{% endif %}, so taps will not be counted.
+              {% if question.is_archived %}Restore it{% else %}Switch it on{% endif %} first if the answers matter.
+            {% else %}
+              This message has reply buttons but no question is linked, so taps will arrive as ordinary chat replies
+              and will not count towards the prize draw.
+              {% if membership.can_manage %}<a href="{% url 'questions:question_create' %}?template={{ chosen.pk }}" class="font-semibold underline">Link a question</a> first, or carry on if that is what you want.{% else %}If they should count, ask an administrator to link a question first.{% endif %}
+            {% endif %}
+          </p>
+        </div>
+      {% endif %}
+    {% endif %}
   {% endif %}
 </form>
 

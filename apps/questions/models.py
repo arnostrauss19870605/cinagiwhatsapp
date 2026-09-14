@@ -30,6 +30,10 @@ class Question(WorkspaceScopedModel, TimeStampedModel):
         default=True, help_text="Each person who answers earns one prize-draw entry."
     )
     is_active = models.BooleanField(default=True, help_text="Switched-off questions stop counting answers.")
+    archived_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Archived questions keep their answers but leave the list and the prize draw.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -39,6 +43,14 @@ class Question(WorkspaceScopedModel, TimeStampedModel):
 
     def __str__(self):
         return self.title
+
+    @property
+    def is_archived(self):
+        return self.archived_at is not None
+
+    @property
+    def accepting_answers(self):
+        return self.is_active and not self.is_archived
 
     def option_for(self, label):
         """The option matching a button tap, by its label. Case and spacing forgiven."""

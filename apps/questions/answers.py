@@ -65,7 +65,7 @@ def _record(conversation, message):
     if sent is None:
         return None
     question = getattr(sent.template, "question", None)
-    if question is None or not question.is_active:
+    if question is None or not question.accepting_answers:
         return None
 
     option = question.option_for(message.body)

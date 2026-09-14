@@ -83,7 +83,25 @@
             {% if d.problem %}<p class="mt-1 max-w-xs text-xs text-rose-700">{{ d.problem }}</p>{% endif %}
           </td>
           <td class="px-5 py-3 text-xs text-slate-500">{{ d.updated_at|timesince }} ago{% if d.created_by %} · {{ d.created_by.display_name }}{% endif %}</td>
-          <td class="px-5 py-3 text-right text-xs"><a href="{% url 'library:draft_edit' d.pk %}" class="text-[#0065A9] hover:underline">{% if d.editable %}Edit{% else %}View{% endif %}</a></td>
+          <td class="px-5 py-3 text-right text-xs" x-data="{confirm:false}">
+            <a href="{% url 'library:draft_edit' d.pk %}" class="text-[#0065A9] hover:underline">{% if d.editable %}Edit{% else %}View{% endif %}</a>
+            {% if membership.can_manage and d.status != 'submitting' %}
+              <button type="button" @click="confirm=!confirm" class="ml-3 text-slate-400 hover:text-rose-600">Delete</button>
+              <div x-show="confirm" x-cloak class="mt-2 ml-auto w-64 rounded-xl bg-amber-50 p-3 text-left text-amber-900 ring-1 ring-amber-200">
+                {% if d.template_id %}
+                  This one is on WhatsApp as {{ d.name }}. Deleting removes it there too. Sent messages keep their text. The name is locked for 30 days.
+                  <form method="post" action="{% url 'library:template_delete' d.template_id %}" class="mt-2">{% csrf_token %}
+                    <button class="w-full rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white hover:bg-rose-700">Yes, delete {{ d.internal_title }}</button>
+                  </form>
+                {% else %}
+                  This draft has not been sent to WhatsApp. Deleting it only removes it here.
+                  <form method="post" action="{% url 'library:draft_delete' d.pk %}" class="mt-2">{% csrf_token %}
+                    <button class="w-full rounded-lg bg-rose-600 px-3 py-1.5 font-semibold text-white hover:bg-rose-700">Yes, delete {{ d.internal_title }}</button>
+                  </form>
+                {% endif %}
+              </div>
+            {% endif %}
+          </td>
         </tr>
       {% endfor %}
     </tbody>

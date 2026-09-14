@@ -229,7 +229,17 @@ def draft_clone(request, pk):
 def draft_delete(request, pk):
     require_role(request, *WorkspaceMembership.MANAGE_ROLES)
     draft = scoped_get_or_404(TemplateDraft, request, pk=pk)
-    if request.method == "POST" and draft.editable:
+    if request.method != "POST":
+        return redirect("library:templates")
+    if draft.template_id:
+        flash.error(
+            request,
+            f"'{draft.internal_title}' is on WhatsApp as '{draft.name}'. Delete it from the "
+            "WhatsApp list below and the draft goes with it.",
+        )
+    elif draft.status == TemplateDraft.Status.SUBMITTING:
+        flash.error(request, f"'{draft.internal_title}' is still being sent to Meta. Try again in a moment.")
+    else:
         audit("template.draft_deleted", request=request, name=draft.name)
         draft.delete()
         flash.success(request, "Draft deleted.")
@@ -341,6 +351,9 @@ def bulk_send(request):
             "named": named,
             "manual_variables": manual_variables,
             "auto_variables": [v for v in (chosen.variable_map or []) if v.get("source") != "manual"] if chosen else [],
+            "has_buttons": bool(chosen and chosen.quick_reply_labels),
+            # The reverse one-to-one raises when nothing is linked; getattr swallows that.
+            "question": getattr(chosen, "question", None) if chosen else None,
         },
     )
 

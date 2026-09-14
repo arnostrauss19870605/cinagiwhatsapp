@@ -40,7 +40,14 @@ def questions(request):
         return redirect("workspaces:list")
     _supervisor(request)
     rows = Question.objects.for_request(request).select_related("template").annotate(answered=Count("answers"))
-    return render(request, "questions/questions.html", {"questions": rows})
+    return render(
+        request,
+        "questions/questions.html",
+        {
+            "questions": [q for q in rows if not q.is_archived],
+            "archived": [q for q in rows if q.is_archived],
+        },
+    )
 
 
 def _candidate_templates(request, current=None):
@@ -189,6 +196,51 @@ def question_toggle(request, pk):
     return redirect("questions:question_results", pk=question.pk)
 
 
+@login_required
+@require_POST
+def question_archive(request, pk):
+    """Put a question away, or bring it back. Its answers stay either way."""
+    _manager(request)
+    question = scoped_get_or_404(Question, request, pk=pk)
+    if question.is_archived:
+        question.archived_at = None
+        question.save(update_fields=["archived_at"])
+        audit("question.unarchived", request=request, title=question.title)
+        flash.success(request, f"'{question.title}' is back in the list.")
+        return redirect("questions:question_results", pk=question.pk)
+    question.archived_at = timezone.now()
+    question.save(update_fields=["archived_at"])
+    audit("question.archived", request=request, title=question.title)
+    flash.success(
+        request,
+        f"'{question.title}' archived. Its answers are kept and still open from Archived, "
+        "but they no longer count towards the prize draw.",
+    )
+    return redirect("questions:questions")
+
+
+@login_required
+@require_POST
+def question_delete(request, pk):
+    """Only for questions nobody has answered. Anything with answers is archived instead."""
+    _manager(request)
+    question = scoped_get_or_404(Question, request, pk=pk)
+    answered = question.answers.count()
+    if answered:
+        plural = "s" if answered != 1 else ""
+        flash.error(
+            request,
+            f"'{question.title}' has {answered} answer{plural}, so it cannot be deleted. "
+            "Archive it instead to keep the answers and tidy the list.",
+        )
+        return redirect("questions:question_results", pk=question.pk)
+    title, template_name = question.title, question.template.name
+    question.delete()
+    audit("question.deleted", request=request, title=title, template=template_name)
+    flash.success(request, f"'{title}' deleted. The message '{template_name}' is still in the library.")
+    return redirect("questions:questions")
+
+
 def _xlsx(sheets):
     """sheets: [(title, header_row, rows)] -> bytes."""
     from openpyxl import Workbook
@@ -252,7 +304,7 @@ def _entries(request):
     counts = Counter()
     answered = (
         Answer.objects.for_request(request)
-        .filter(question__counts_as_entry=True, question__is_active=True)
+        .filter(question__counts_as_entry=True, question__is_active=True, question__archived_at__isnull=True)
         .values_list("contact_id", flat=True)
     )
     for contact_id in answered:
@@ -283,7 +335,9 @@ def prize_draw(request):
         {
             "rows": rows,
             "total_entries": sum(r["entries"] for r in rows),
-            "questions": Question.objects.for_request(request).filter(counts_as_entry=True, is_active=True),
+            "questions": Question.objects.for_request(request).filter(
+                counts_as_entry=True, is_active=True, archived_at__isnull=True
+            ),
             "draws": PrizeDraw.objects.for_request(request).select_related("winner", "drawn_by"),
             "bonuses": BonusEntry.objects.for_request(request).select_related("contact", "created_by")[:20],
         },

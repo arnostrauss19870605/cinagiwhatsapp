@@ -69,3 +69,59 @@ class TemplateDeleteTests(TestCase):
         self.client.force_login(agent)
         self.assertNotContains(self.client.get(reverse("library:templates")), "Yes, delete")
         self.assertEqual(self.client.post(reverse("library:template_delete", args=[self.template.pk])).status_code, 403)
+
+
+@override_settings(OUTBOUND_COMMS_MODE="live")
+class WrittenHereDeleteTests(TestCase):
+    """The 'Written here' list offers Delete too, and routes each draft the right way."""
+
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Alpha")
+        self.channel = WhatsAppChannel.objects.create(
+            workspace=self.workspace, display_name="A", phone_number_id="1", waba_id="w1", access_token="t"
+        )
+        self.owner = User.objects.create_user("arno@cinagi.co.za", "arno@cinagi.co.za")
+        WorkspaceMembership.objects.create(user=self.owner, workspace=self.workspace, role="owner")
+        self.client.force_login(self.owner)
+
+    def _draft(self, **kw):
+        fields = dict(workspace=self.workspace, channel=self.channel, internal_title="Invite", name="invite", body="x")
+        fields.update(kw)
+        return TemplateDraft.objects.create(**fields)
+
+    def test_an_unsent_draft_is_deleted_here_only(self):
+        draft = self._draft()
+        page = self.client.get(reverse("library:templates"))
+        self.assertContains(page, reverse("library:draft_delete", args=[draft.pk]))
+        with mock.patch(DELETE) as delete:
+            self.client.post(reverse("library:draft_delete", args=[draft.pk]))
+        delete.assert_not_called()
+        self.assertFalse(TemplateDraft.objects.exists())
+
+    def test_a_failed_submission_can_be_deleted(self):
+        draft = self._draft(status=TemplateDraft.Status.ERROR)
+        self.client.post(reverse("library:draft_delete", args=[draft.pk]))
+        self.assertFalse(TemplateDraft.objects.exists())
+
+    def test_a_draft_still_being_sent_waits(self):
+        draft = self._draft(status=TemplateDraft.Status.SUBMITTING)
+        page = self.client.get(reverse("library:templates"))
+        self.assertNotContains(page, "Yes, delete Invite")
+        self.client.post(reverse("library:draft_delete", args=[draft.pk]))
+        self.assertTrue(TemplateDraft.objects.exists())
+
+    def test_a_draft_on_whatsapp_goes_through_the_template(self):
+        template = MessageTemplate.objects.create(
+            workspace=self.workspace, channel=self.channel, name="invite", language="en",
+            status=MessageTemplate.Status.APPROVED, meta_id="9",
+        )
+        draft = self._draft(status=TemplateDraft.Status.SUBMITTED, template=template)
+        page = self.client.get(reverse("library:templates"))
+        self.assertContains(page, reverse("library:template_delete", args=[template.pk]))
+        # The draft route refuses and points at the template route.
+        self.client.post(reverse("library:draft_delete", args=[draft.pk]))
+        self.assertTrue(TemplateDraft.objects.exists())
+        with mock.patch(DELETE, return_value={"success": True}):
+            self.client.post(reverse("library:template_delete", args=[template.pk]))
+        self.assertFalse(TemplateDraft.objects.exists())
+        self.assertFalse(MessageTemplate.objects.exists())

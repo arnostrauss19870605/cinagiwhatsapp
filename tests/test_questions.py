@@ -125,6 +125,12 @@ class QuestionAnswerTests(TestCase):
         self._tap("Never")
         self.assertEqual(Answer.objects.count(), 0)
 
+    def test_an_archived_question_stops_counting_too(self):
+        self.question.archived_at = timezone.now()
+        self.question.save()
+        self._tap("Never")
+        self.assertEqual(Answer.objects.count(), 0)
+
     def test_an_answer_carries_its_bulk_send(self):
         batch = BulkSend.objects.create(workspace=self.workspace, channel=self.channel, template=self.template, template_name="quiz_exercise")
         Message.objects.filter(pk=self.sent.pk).update(bulk_send=batch)
@@ -247,3 +253,128 @@ class QuestionTitleTests(TestCase):
         )
         page = self.client.get(reverse("questions:question_create") + f"?template={template.pk}")
         self.assertEqual(page.context["title"], "Q1 exercise")
+
+
+class QuestionTidyingTests(TestCase):
+    """Deleting is only for unanswered questions; anything answered is archived, answers kept."""
+
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Cinagi Broker Support")
+        self.channel = WhatsAppChannel.objects.create(workspace=self.workspace, display_name="A", phone_number_id="1")
+        self.owner = User.objects.create_user("arno@cinagi.co.za", "arno@cinagi.co.za")
+        WorkspaceMembership.objects.create(user=self.owner, workspace=self.workspace, role="owner")
+        self.client.force_login(self.owner)
+        self.thabo = Contact.objects.create(workspace=self.workspace, wa_id="27820000001", display_name="Thabo")
+        self.template = MessageTemplate.objects.create(
+            workspace=self.workspace, channel=self.channel, name="q_test", language="en",
+            status=MessageTemplate.Status.APPROVED,
+            components=[{"type": "BUTTONS", "buttons": [{"type": "QUICK_REPLY", "text": "Yes"}]}],
+        )
+        self.question = Question.objects.create(workspace=self.workspace, template=self.template, title="Test run")
+        self.option = AnswerOption.objects.create(question=self.question, label="Yes", value="yes")
+
+    def _answer(self):
+        return Answer.objects.create(workspace=self.workspace, question=self.question, contact=self.thabo, option=self.option)
+
+    def test_an_unanswered_question_can_be_deleted_and_frees_its_message(self):
+        page = self.client.get(reverse("questions:questions"))
+        self.assertContains(page, reverse("questions:question_delete", args=[self.question.pk]))
+        self.assertNotContains(page, reverse("questions:question_archive", args=[self.question.pk]))
+        response = self.client.post(reverse("questions:question_delete", args=[self.question.pk]))
+        self.assertRedirects(response, reverse("questions:questions"))
+        self.assertFalse(Question.objects.exists())
+        self.assertFalse(AnswerOption.objects.exists())
+        self.assertTrue(MessageTemplate.objects.filter(pk=self.template.pk).exists())
+
+    def test_an_answered_question_is_offered_archive_not_delete(self):
+        self._answer()
+        page = self.client.get(reverse("questions:questions"))
+        self.assertContains(page, reverse("questions:question_archive", args=[self.question.pk]))
+        self.assertNotContains(page, reverse("questions:question_delete", args=[self.question.pk]))
+        self.client.post(reverse("questions:question_delete", args=[self.question.pk]))
+        self.assertTrue(Question.objects.filter(pk=self.question.pk).exists())
+        self.assertEqual(Answer.objects.count(), 1)
+
+    def test_archiving_hides_it_from_the_list_and_the_prize_draw_but_keeps_the_answers(self):
+        self._answer()
+        draw = self.client.get(reverse("questions:prize_draw"))
+        self.assertEqual(draw.context["total_entries"], 1)
+
+        self.client.post(reverse("questions:question_archive", args=[self.question.pk]))
+        self.question.refresh_from_db()
+        self.assertTrue(self.question.is_archived)
+        self.assertEqual(Answer.objects.count(), 1)
+
+        page = self.client.get(reverse("questions:questions"))
+        self.assertEqual([q.pk for q in page.context["questions"]], [])
+        self.assertEqual([q.pk for q in page.context["archived"]], [self.question.pk])
+        self.assertContains(page, "Restore")
+        self.assertEqual(self.client.get(reverse("questions:prize_draw")).context["total_entries"], 0)
+        self.assertContains(self.client.get(reverse("questions:question_results", args=[self.question.pk])), "archived")
+
+    def test_restoring_brings_it_back_into_the_draw(self):
+        self._answer()
+        self.client.post(reverse("questions:question_archive", args=[self.question.pk]))
+        self.client.post(reverse("questions:question_archive", args=[self.question.pk]))
+        self.question.refresh_from_db()
+        self.assertFalse(self.question.is_archived)
+        self.assertEqual(self.client.get(reverse("questions:prize_draw")).context["total_entries"], 1)
+
+    def test_only_managers_can_tidy(self):
+        sam = User.objects.create_user("sam@cinagi.co.za", "sam@cinagi.co.za")
+        WorkspaceMembership.objects.create(user=sam, workspace=self.workspace, role="supervisor")
+        self.client.force_login(sam)
+        self.assertNotContains(self.client.get(reverse("questions:questions")), "Yes, delete")
+        self.assertEqual(self.client.post(reverse("questions:question_delete", args=[self.question.pk])).status_code, 403)
+        self.assertEqual(self.client.post(reverse("questions:question_archive", args=[self.question.pk])).status_code, 403)
+
+
+class BulkSendQuestionNoteTests(TestCase):
+    """Bulk send warns when a message with reply buttons has no live question behind it."""
+
+    def setUp(self):
+        self.workspace = Workspace.objects.create(name="Cinagi Broker Support")
+        self.channel = WhatsAppChannel.objects.create(workspace=self.workspace, display_name="A", phone_number_id="1")
+        self.owner = User.objects.create_user("arno@cinagi.co.za", "arno@cinagi.co.za")
+        WorkspaceMembership.objects.create(user=self.owner, workspace=self.workspace, role="owner")
+        self.client.force_login(self.owner)
+        self.template = MessageTemplate.objects.create(
+            workspace=self.workspace, channel=self.channel, name="q_buttons", language="en",
+            status=MessageTemplate.Status.APPROVED,
+            components=[
+                {"type": "BODY", "text": "Hi {{1}}, ready?"},
+                {"type": "BUTTONS", "buttons": [{"type": "QUICK_REPLY", "text": "Yes"}]},
+            ],
+        )
+
+    def _page(self, template=None):
+        return self.client.get(reverse("library:bulk_send") + f"?template={(template or self.template).pk}")
+
+    def test_buttons_without_a_question_get_a_warning_and_a_link_to_fix_it(self):
+        page = self._page()
+        self.assertContains(page, "no question is linked")
+        self.assertContains(page, reverse("questions:question_create") + f"?template={self.template.pk}")
+
+    def test_a_live_question_is_confirmed(self):
+        question = Question.objects.create(workspace=self.workspace, template=self.template, title="Q1 ready")
+        page = self._page()
+        self.assertContains(page, "count as answers to the question")
+        self.assertContains(page, reverse("questions:question_results", args=[question.pk]))
+        self.assertNotContains(page, "no question is linked")
+
+    def test_an_archived_or_off_question_is_called_out(self):
+        question = Question.objects.create(workspace=self.workspace, template=self.template, title="Q1 ready", archived_at=timezone.now())
+        self.assertContains(self._page(), "is archived, so taps will not be counted")
+        question.archived_at = None
+        question.is_active = False
+        question.save()
+        self.assertContains(self._page(), "is switched off, so taps will not be counted")
+
+    def test_a_message_without_buttons_says_nothing(self):
+        plain = MessageTemplate.objects.create(
+            workspace=self.workspace, channel=self.channel, name="plain", language="en",
+            status=MessageTemplate.Status.APPROVED, components=[{"type": "BODY", "text": "Hello {{1}}"}],
+        )
+        page = self._page(plain)
+        self.assertNotContains(page, "no question is linked")
+        self.assertNotContains(page, "count as answers")

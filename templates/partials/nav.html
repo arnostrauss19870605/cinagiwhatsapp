@@ -1,6 +1,12 @@
 <header class="sticky top-0 z-30 border-b border-white/10 bg-slate-950/95 text-slate-200 shadow-lg shadow-slate-900/10 backdrop-blur">
   <div class="mx-auto flex max-w-full items-center gap-3 px-4 py-2">
 
+    {% if workspace %}
+      <button type="button" x-data @click="$store.nav.open = !$store.nav.open" class="rounded-lg border border-white/15 p-2 text-slate-100 transition hover:bg-white/10 md:hidden" title="Menu">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    {% endif %}
+
     <a href="{% url 'core:dashboard' %}" class="flex items-center gap-2.5 font-semibold text-white">
       <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#0065A9] to-[#00a9e0] text-sm font-bold text-white shadow-md shadow-[#0065A9]/40">C</span>
       <span class="hidden tracking-tight sm:inline">{{ SITE_NAME }}</span>
@@ -51,11 +57,6 @@
           </form>
         </div>
       </div>
-      {% if workspace %}
-        <button type="button" x-data @click="$store.nav.open = !$store.nav.open" class="rounded-lg border border-white/15 p-2 text-slate-100 transition hover:bg-white/10 md:hidden" title="Menu">
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
-        </button>
-      {% endif %}
     </div>
   </div>
 </header>
