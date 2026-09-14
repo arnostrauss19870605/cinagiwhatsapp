@@ -1,5 +1,5 @@
 {% load static copy_tags %}<!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -17,6 +17,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <style>
     [x-cloak]{display:none!important}
+    /* Measured from the real header once the page loads; this is only the first guess. */
+    :root{--header-h:3.25rem}
     /* Cinagi brand: blue #0065A9, green #76BD4C - matches cinagi.co.za */
     .accent{background-color:{{ workspace.accent_colour|default:"#0065A9" }}}
     .accent-text{color:{{ workspace.accent_colour|default:"#0065A9" }}}
@@ -48,7 +50,7 @@
     .hero>*{position:relative}
   </style>
 </head>
-<body class="h-full tech-bg text-slate-800 antialiased">
+<body class="tech-bg text-slate-800 antialiased">
 <script>
   // The left-hand menu: collapsed to icons or not, remembered per browser.
   document.addEventListener('alpine:init', function () {
@@ -62,6 +64,19 @@
         try { localStorage.setItem('sidenav.collapsed', this.collapsed ? '1' : '0'); } catch (e) {}
       }
     });
+  });
+
+  // The side menu and the chat screen sit below the header, so they need its real
+  // height - which depends on font, zoom and whether the header wraps.
+  document.addEventListener('DOMContentLoaded', function () {
+    var header = document.querySelector('header');
+    if (!header) return;
+    var apply = function () {
+      document.documentElement.style.setProperty('--header-h', header.offsetHeight + 'px');
+    };
+    apply();
+    if (window.ResizeObserver) new ResizeObserver(apply).observe(header);
+    else window.addEventListener('resize', apply);
   });
 
   // HTMX posts need the CSRF token; attach it once, globally.

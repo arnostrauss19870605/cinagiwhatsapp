@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Chats{% endblock %}
-{% block main_class %}h-[calc(100vh-3.25rem)]{% endblock %}
+{% block main_class %}h-[calc(100vh-var(--header-h))]{% endblock %}
 {% block content %}
 <div class="flex h-full" x-data="{pane: '{% if conversation %}thread{% else %}list{% endif %}', showInfo: false}">
 

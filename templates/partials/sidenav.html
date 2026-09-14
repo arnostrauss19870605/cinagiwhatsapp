@@ -1,7 +1,7 @@
 {% with ns=request.resolver_match.namespace name=request.resolver_match.url_name %}
 {# Left-hand navigation. Collapses to an icon rail; on small screens it is a drawer opened from the header. #}
 <aside x-data
-       class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white shadow-xl transition-all duration-200 md:sticky md:top-[3.25rem] md:h-[calc(100vh-3.25rem)] md:translate-x-0 md:shadow-none"
+       class="fixed left-0 top-[var(--header-h)] z-40 flex h-[calc(100vh-var(--header-h))] w-64 flex-col border-r border-slate-200 bg-white shadow-xl transition-[width,transform] duration-200 md:sticky md:translate-x-0 md:shadow-none"
        :class="{'translate-x-0': $store.nav.open, '-translate-x-full': !$store.nav.open, 'md:w-16': $store.nav.collapsed, 'md:w-60': !$store.nav.collapsed}"
        @keydown.escape.window="$store.nav.open = false">
 
@@ -92,5 +92,5 @@
     {% endif %}
   </nav>
 </aside>
-<div x-data x-show="$store.nav.open" x-cloak @click="$store.nav.open = false" class="fixed inset-0 z-30 bg-slate-900/40 md:hidden"></div>
+<div x-data x-show="$store.nav.open" x-cloak @click="$store.nav.open = false" class="fixed inset-x-0 bottom-0 top-[var(--header-h)] z-30 bg-slate-900/40 md:hidden"></div>
 {% endwith %}
