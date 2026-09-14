@@ -94,6 +94,24 @@
     </div>
 
     <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-base font-semibold text-slate-900">Add someone new</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-slate-500">
+        Someone who has never messaged this number. They become a contact and go straight into this audience.
+        If the number already exists, that person is added instead.
+      </p>
+      <form method="post" action="{% url 'contacts:audience_add_new' audience.pk %}" class="mt-4 space-y-3">
+        {% csrf_token %}
+        <input name="name" placeholder="Full name" required
+               class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+        <input name="mobile" placeholder="Mobile number, e.g. 082 123 4567" required inputmode="tel"
+               class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+        <button class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+          Create and add to this audience
+        </button>
+      </form>
+    </div>
+
+    <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
       <h2 class="text-base font-semibold text-slate-900">Upload a spreadsheet</h2>
       <p class="mt-1.5 text-xs leading-relaxed text-slate-500">
         A CSV with a <span class="font-mono">name</span> (or first_name / last_name) column and a

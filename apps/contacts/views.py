@@ -230,6 +230,40 @@ def audience_add(request, pk):
 
 @login_required
 @require_POST
+def audience_add_new(request, pk):
+    """Type in one person who has never messaged us, and put them in this audience.
+
+    Matched on the number, so typing someone who already exists just adds
+    them rather than creating a twin.
+    """
+    _manager(request)
+    audience = scoped_get_or_404(Audience, request, pk=pk)
+    name = (request.POST.get("name") or "").strip()
+    msisdn = normalise_msisdn(request.POST.get("mobile") or "")
+    if len(msisdn) < 10:
+        flash.error(request, "Enter a mobile number, e.g. 082 123 4567 or +27 82 123 4567.")
+        return redirect("contacts:audience_detail", pk=audience.pk)
+    contact, created = Contact.objects.get_or_create(
+        workspace=request.workspace, wa_id=msisdn, defaults={"display_name": name}
+    )
+    if not created and name and not contact.display_name:
+        contact.display_name = name
+        contact.save(update_fields=["display_name"])
+    already = audience.contacts.filter(pk=contact.pk).exists()
+    audience.contacts.add(contact)
+    audit("audience.member_added", request=request, target=audience, contact=contact.pk, created=created)
+    if already:
+        flash.info(request, f"{contact.name} was already in '{audience.name}'.")
+    else:
+        flash.success(
+            request,
+            f"{contact.name} {'added as a new contact and ' if created else ''}put in '{audience.name}'.",
+        )
+    return redirect("contacts:audience_detail", pk=audience.pk)
+
+
+@login_required
+@require_POST
 def audience_remove(request, pk):
     _manager(request)
     audience = scoped_get_or_404(Audience, request, pk=pk)

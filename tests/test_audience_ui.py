@@ -184,3 +184,34 @@ class BulkSendUiTests(AudienceUiBase):
             }, follow=True)
         send.assert_not_called()
         self.assertContains(response, "attach a file or paste an https link")
+
+
+class AddNewPersonTests(AudienceUiBase):
+    def test_a_person_who_never_messaged_can_be_created_straight_into_an_audience(self):
+        from apps.contacts.models import Audience, Contact
+
+        audience = Audience.objects.create(workspace=self.workspace, name="Launch attendees")
+        response = self.client.post(
+            reverse("contacts:audience_add_new", args=[audience.pk]),
+            {"name": "Thandi Nkosi", "mobile": "082 123 4567"},
+        )
+        self.assertRedirects(response, reverse("contacts:audience_detail", args=[audience.pk]))
+        contact = Contact.objects.get(wa_id="27821234567")
+        self.assertEqual(contact.display_name, "Thandi Nkosi")
+        self.assertIn(contact, audience.contacts.all())
+
+        # Same number again: no twin, just already-there.
+        self.client.post(reverse("contacts:audience_add_new", args=[audience.pk]), {"name": "T", "mobile": "+27 82 123 4567"})
+        self.assertEqual(Contact.objects.filter(wa_id="27821234567").count(), 1)
+
+        # A bad number is refused with a plain message.
+        self.client.post(reverse("contacts:audience_add_new", args=[audience.pk]), {"name": "X", "mobile": "12"})
+        self.assertEqual(Contact.objects.count(), 1)
+
+    def test_agents_cannot_add_people(self):
+        from apps.contacts.models import Audience
+
+        audience = Audience.objects.create(workspace=self.workspace, name="Launch attendees")
+        self.client.force_login(self.agent)
+        response = self.client.post(reverse("contacts:audience_add_new", args=[audience.pk]), {"name": "A", "mobile": "0821234567"})
+        self.assertEqual(response.status_code, 403)
