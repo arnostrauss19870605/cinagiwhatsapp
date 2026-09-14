@@ -23,6 +23,45 @@
   {% endif %}
 </div>
 
+{% if membership.can_manage %}
+<details class="group mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm" {% if not drafts %}open{% endif %}>
+  <summary class="flex cursor-pointer list-none items-center justify-between px-6 py-4">
+    <span class="text-sm font-semibold text-slate-900">How to: from a new template to answers in the prize draw</span>
+    <span class="text-xs text-slate-400 group-open:hidden">Show</span><span class="hidden text-xs text-slate-400 group-open:inline">Hide</span>
+  </summary>
+  <div class="grid gap-6 border-t border-slate-100 px-6 py-5 text-sm text-slate-700 lg:grid-cols-3">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wider text-[#0065A9]">1. Write and submit</p>
+      <ol class="mt-2 list-decimal space-y-1.5 pl-5">
+        <li>Click <strong>New template</strong>. Give it a name for the team and a Meta name like <code class="rounded bg-slate-100 px-1">launch_q1_exercise</code>.</li>
+        <li>Category is <strong>Marketing</strong> for anything promotional, including a prize draw. Meta rejects a Utility template that reads like marketing.</li>
+        <li>Write the message. Start with <code class="rounded bg-slate-100 px-1">Hi {% templatetag openvariable %}first_name{% templatetag closevariable %},</code> so each person is greeted by name. Keep the footer "Reply AGENT any time to talk to a person."</li>
+        <li>For a question, add up to three <strong>reply buttons</strong> with the answers, each under 25 characters.</li>
+        <li><strong>Save draft</strong>, check the placeholders section, then <strong>Send to Meta for approval</strong>.</li>
+      </ol>
+    </div>
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wider text-[#0065A9]">2. Wait for approval</p>
+      <ol class="mt-2 list-decimal space-y-1.5 pl-5">
+        <li>The status on this page updates by itself. Approval usually takes minutes to a few hours.</li>
+        <li>If it says <strong>Rejected</strong>, the reason is shown under the status. Open the draft, click <strong>New version</strong>, fix it and submit again.</li>
+        <li>Approved templates can be changed only by making a new version. The old one keeps working until the new one is approved.</li>
+        <li>Send yourself a test first: put your own number in a small audience and send to that before the real list.</li>
+      </ol>
+    </div>
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wider text-[#0065A9]">3. Ask it, and count the answers</p>
+      <ol class="mt-2 list-decimal space-y-1.5 pl-5">
+        <li>Open <a href="{% url 'questions:questions' %}" class="text-[#0065A9] hover:underline">Questions</a> and click <strong>New question</strong>. Pick the approved template.</li>
+        <li>Give each button a short code and a score, tick <strong>Answering earns a prize-draw entry</strong>, and optionally write a thank-you reply.</li>
+        <li>Open <a href="{% url 'library:bulk_send' %}" class="text-[#0065A9] hover:underline">Bulk send</a>, choose the template and the audience, and click <strong>Start sending</strong>.</li>
+        <li>Taps appear on the question's results page within seconds. The <a href="{% url 'questions:prize_draw' %}" class="text-[#0065A9] hover:underline">Prize draw</a> page keeps the running entries and draws the winner.</li>
+      </ol>
+    </div>
+  </div>
+</details>
+{% endif %}
+
 {% if drafts %}
 <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Written here</h2>
 <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white">

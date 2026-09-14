@@ -223,3 +223,27 @@ class PrizeDrawTests(TestCase):
         self.assertEqual(BonusEntry.objects.get().entries, 3)
         export = self.client.get(reverse("questions:prize_draw_export"))
         self.assertEqual(export.status_code, 200)
+
+
+class QuestionTitleTests(TestCase):
+    def test_the_team_name_is_prefilled_from_the_template(self):
+        from apps.library.models import TemplateDraft
+
+        workspace = Workspace.objects.create(name="Alpha")
+        channel = WhatsAppChannel.objects.create(workspace=workspace, display_name="A", phone_number_id="1")
+        owner = User.objects.create_user("arno@cinagi.co.za", "arno@cinagi.co.za")
+        WorkspaceMembership.objects.create(user=owner, workspace=workspace, role="owner")
+        template = MessageTemplate.objects.create(
+            workspace=workspace, channel=channel, name="launch_q1_exercise", language="en",
+            status=MessageTemplate.Status.APPROVED,
+            components=[{"type": "BUTTONS", "buttons": [{"type": "QUICK_REPLY", "text": "Yes"}]}],
+        )
+        self.client.force_login(owner)
+        page = self.client.get(reverse("questions:question_create") + f"?template={template.pk}")
+        self.assertEqual(page.context["title"], "Launch q1 exercise")
+        TemplateDraft.objects.create(
+            workspace=workspace, channel=channel, internal_title="Q1 exercise", name="launch_q1_exercise",
+            body="x", template=template,
+        )
+        page = self.client.get(reverse("questions:question_create") + f"?template={template.pk}")
+        self.assertEqual(page.context["title"], "Q1 exercise")

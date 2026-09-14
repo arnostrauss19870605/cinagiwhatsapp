@@ -133,11 +133,21 @@ def question_edit(request, pk=None):
             "chosen": chosen,
             "option_rows": option_rows,
             "audiences": audiences,
-            "title": request.POST.get("title", question.title if question else ""),
+            "title": request.POST.get("title", question.title if question else _suggested_title(chosen)),
             "thanks_text": request.POST.get("thanks_text", question.thanks_text if question else ""),
             "counts_as_entry": (request.POST.get("counts_as_entry") == "on") if request.method == "POST" else (question.counts_as_entry if question else True),
         },
     )
+
+
+def _suggested_title(template):
+    """The team name typed when the template was written, so it need not be typed twice."""
+    if template is None:
+        return ""
+    draft = template.drafts.order_by("-version", "-pk").first()
+    if draft and draft.internal_title:
+        return draft.internal_title
+    return template.name.replace("_", " ").capitalize()
 
 
 @login_required
