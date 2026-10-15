@@ -135,7 +135,10 @@ else:
             "PASSWORD": env("DB_PASSWORD", "cinagi"),
             "HOST": env("DB_HOST", "postgres"),
             "PORT": env("DB_PORT", "5432"),
-            "CONN_MAX_AGE": 60,
+            # Must stay 0 while the web process runs under ASGI. Each request runs its sync
+            # code on a fresh thread, so a persistent connection is never reused or closed and
+            # the web workers leak connections until Postgres hits max_connections.
+            "CONN_MAX_AGE": 0,
         }
     }
 
