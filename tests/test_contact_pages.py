@@ -170,3 +170,39 @@ class ChatExportTests(ContactPagesBase):
         payload = json.loads(self._export("json").content)
         kinds = [m["kind"] for m in payload["messages"]]
         self.assertIn("internal note", kinds)
+
+
+class ContactListExportTests(ContactPagesBase):
+    def setUp(self):
+        self.client.force_login(self.supervisor)
+
+    def _rows(self, response):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        return list(load_workbook(BytesIO(response.content)).active.values)
+
+    def test_agents_may_not_download_the_list(self):
+        self.client.force_login(self.agent)
+        self.assertEqual(self.client.get(reverse("contacts:contacts_export")).status_code, 403)
+
+    def test_the_download_lists_everyone_with_their_audiences(self):
+        Audience.objects.create(workspace=self.workspace, name="VIPs").contacts.add(self.contact)
+        Contact.objects.create(workspace=self.workspace, wa_id="27831234567", display_name="Ann Botha")
+        rows = self._rows(self.client.get(reverse("contacts:contacts_export")))
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[2][:2], ("Thabo Mokoena", "+27726124698"))
+        self.assertEqual(rows[2][-1], "VIPs")
+        self.assertTrue(AuditLog.objects.filter(action="contacts.exported").exists())
+
+    def test_a_search_downloads_only_what_it_matched(self):
+        Contact.objects.create(workspace=self.workspace, wa_id="27831234567", display_name="Ann Botha")
+        rows = self._rows(self.client.get(reverse("contacts:contacts_export"), {"q": "thabo"}))
+        self.assertEqual([r[0] for r in rows[1:]], ["Thabo Mokoena"])
+
+    def test_another_workspaces_contacts_are_never_in_the_file(self):
+        other = Workspace.objects.create(name="Bravo")
+        Contact.objects.create(workspace=other, wa_id="27820000009", display_name="Stranger")
+        rows = self._rows(self.client.get(reverse("contacts:contacts_export")))
+        self.assertNotIn("Stranger", [r[0] for r in rows])

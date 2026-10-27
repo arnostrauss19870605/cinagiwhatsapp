@@ -21,6 +21,10 @@
        class="rounded-xl bg-[#0065A9] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">
       Send a message to this group
     </a>
+    <a href="{% url 'contacts:audience_export' audience.pk %}"
+       class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">
+      Download as Excel
+    </a>
     <form method="post" action="{% url 'contacts:audience_delete' audience.pk %}"
           onsubmit="return confirm('Delete this audience? The contacts themselves are untouched.');">
       {% csrf_token %}

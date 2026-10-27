@@ -73,6 +73,36 @@ class AudiencePageTests(AudienceUiBase):
         )
         self.assertEqual(audience.contacts.count(), 0)
 
+    def test_members_can_be_downloaded_as_excel(self):
+        from openpyxl import load_workbook
+
+        from apps.core.models import AuditLog
+
+        audience = Audience.objects.create(workspace=self.workspace, name="VIP brokers")
+        audience.contacts.add(Contact.objects.create(
+            workspace=self.workspace, wa_id="27726124698", display_name="Thabo Mokoena"
+        ))
+        Contact.objects.create(workspace=self.workspace, wa_id="27831234567", display_name="Not a member")
+        response = self.client.get(reverse("contacts:audience_export", args=[audience.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('filename="vip-brokers-members.xlsx"', response["Content-Disposition"])
+        rows = list(load_workbook(BytesIO(response.content)).active.values)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1][:2], ("Thabo Mokoena", "+27726124698"))
+        self.assertTrue(AuditLog.objects.filter(action="audience.exported").exists())
+
+    def test_an_agent_may_not_download_an_audience(self):
+        audience = Audience.objects.create(workspace=self.workspace, name="VIPs")
+        self.client.force_login(self.agent)
+        response = self.client.get(reverse("contacts:audience_export", args=[audience.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_another_workspaces_audience_cannot_be_downloaded(self):
+        other = Workspace.objects.create(name="Bravo")
+        audience = Audience.objects.create(workspace=other, name="Theirs")
+        response = self.client.get(reverse("contacts:audience_export", args=[audience.pk]))
+        self.assertEqual(response.status_code, 404)
+
     def test_a_contact_from_another_workspace_cannot_be_added(self):
         other = Workspace.objects.create(name="Bravo")
         stranger = Contact.objects.create(workspace=other, wa_id="27820000009")

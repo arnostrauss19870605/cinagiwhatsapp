@@ -14,8 +14,9 @@
   <p class="num text-sm text-sky-100">{{ total }} total</p>
 </div>
 
-<form method="get" class="mt-6">
-  <div class="relative max-w-xl">
+<div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+<form method="get" class="w-full max-w-xl">
+  <div class="relative">
     <input name="q" value="{{ query }}" placeholder="Search by name or number…"
            class="w-full rounded-2xl border-slate-300 py-3 pl-4 pr-24 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
     <button class="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-[#0065A9] px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-[#005490]">
@@ -23,6 +24,13 @@
     </button>
   </div>
 </form>
+{% if membership.can_supervise %}
+  <a href="{% url 'contacts:contacts_export' %}{% if query %}?q={{ query|urlencode }}{% endif %}"
+     class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">
+    {% if query %}Download these results as Excel{% else %}Download all as Excel{% endif %}
+  </a>
+{% endif %}
+</div>
 
 <div class="mt-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
   <table class="w-full text-sm">

@@ -20,12 +20,7 @@ from apps.workspaces.models import WorkspaceMembership
 from .models import Audience, Contact, normalise_msisdn
 
 
-@login_required
-def contacts(request):
-    """Everyone we have ever spoken to, searchable by name or number."""
-    if request.workspace is None:
-        return redirect("workspaces:list")
-    query = (request.GET.get("q") or "").strip()
+def _search_contacts(request, query):
     found = Contact.objects.for_request(request).prefetch_related("audiences")
     if query:
         found = found.filter(
@@ -33,12 +28,89 @@ def contacts(request):
             | Q(profile_name__icontains=query)
             | Q(wa_id__icontains=normalise_msisdn(query) or query)
         )
+    return found
+
+
+@login_required
+def contacts(request):
+    """Everyone we have ever spoken to, searchable by name or number."""
+    if request.workspace is None:
+        return redirect("workspaces:list")
+    query = (request.GET.get("q") or "").strip()
+    found = _search_contacts(request, query)
     return render(
         request,
         "contacts/contacts.html",
         {"contacts": found[:200], "query": query,
          "total": Contact.objects.for_request(request).count()},
     )
+
+
+def _contacts_xlsx(contacts, *, sheet_title, with_audiences=False):
+    """One row per person -> (bytes, row count)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    def local(moment):
+        return timezone.localtime(moment).strftime("%Y-%m-%d %H:%M") if moment else ""
+
+    header = ["Name", "Number", "WhatsApp profile name", "Opted out", "Blocked", "First seen", "Last message"]
+    widths = [28, 18, 26, 18, 9, 18, 18]
+    if with_audiences:
+        header.append("Audiences")
+        widths.append(40)
+    book = Workbook()
+    sheet = book.active
+    sheet.title = sheet_title
+    sheet.append(header)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="0065A9")
+    count = 0
+    for contact in contacts:
+        row = [
+            contact.name,
+            contact.pretty_number,
+            contact.profile_name,
+            local(contact.opted_out_at),
+            "Yes" if contact.is_blocked else "",
+            local(contact.first_seen_at),
+            local(contact.last_seen_at),
+        ]
+        if with_audiences:
+            row.append(", ".join(a.name for a in contact.audiences.all()))
+        sheet.append(row)
+        count += 1
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:{get_column_letter(len(header))}{max(sheet.max_row, 1)}"
+    buffer = io.BytesIO()
+    book.save(buffer)
+    return buffer.getvalue(), count
+
+
+def _xlsx_download(content, filename):
+    response = HttpResponse(
+        content, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@login_required
+def contacts_export(request):
+    """The contact list as Excel - the whole list, or just what the search
+    matched. Supervisors and up, and audited, like a chat export."""
+    if request.workspace is None:
+        return redirect("workspaces:list")
+    require_role(request, *WorkspaceMembership.SUPERVISE_ROLES)
+    query = (request.GET.get("q") or "").strip()
+    found = _search_contacts(request, query).order_by("display_name", "wa_id")
+    content, count = _contacts_xlsx(found, sheet_title="Contacts", with_audiences=True)
+    audit("contacts.exported", request=request, query=query, rows=count)
+    return _xlsx_download(content, f"contacts-{timezone.localdate():%Y-%m-%d}.xlsx")
 
 
 def _history(request, contact):
@@ -215,6 +287,18 @@ def audience_detail(request, pk):
             "query": query,
         },
     )
+
+
+@login_required
+def audience_export(request, pk):
+    """Everyone in this audience as an Excel file. Audited, because it is a
+    list of customer numbers leaving the platform."""
+    _manager(request)
+    audience = scoped_get_or_404(Audience, request, pk=pk)
+    members = audience.contacts.order_by("display_name", "wa_id")
+    content, count = _contacts_xlsx(members, sheet_title="Members")
+    audit("audience.exported", request=request, target=audience, rows=count)
+    return _xlsx_download(content, f"{slugify(audience.name) or 'audience'}-members.xlsx")
 
 
 @login_required
