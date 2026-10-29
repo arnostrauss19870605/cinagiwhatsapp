@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Import from a spreadsheet{% endblock %}
+{% block content %}
+
+<nav class="text-sm text-slate-500">
+  <a href="{% url 'contacts:audiences' %}" class="hover:text-[#0065A9]">Audiences</a>
+  <span class="mx-1.5">/</span>
+  <span class="text-slate-800">Import from a spreadsheet</span>
+</nav>
+
+<div class="mt-4">
+  <p class="text-xs font-semibold uppercase tracking-[.2em] text-slate-400">Step 1 of 2</p>
+  <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Import people from a spreadsheet</h1>
+  <p class="mt-1.5 max-w-2xl text-sm text-slate-500">
+    Upload your Excel file and choose where the people should go. On the next screen you tell us
+    which column is the cell number and which are the names - your columns can be called anything
+    and be in any order.
+  </p>
+</div>
+
+<form method="post" enctype="multipart/form-data"
+      x-data="{ target: '{{ form.target }}' }"
+      class="mt-8 max-w-2xl space-y-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+  {% csrf_token %}
+
+  <div>
+    <label class="block text-sm font-medium text-slate-700">Your spreadsheet
+      <input type="file" name="file" required
+             accept=".xlsx,.xlsm,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+             class="mt-1.5 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0065A9]/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#0065A9] hover:file:bg-[#0065A9]/20">
+    </label>
+    <p class="mt-1.5 text-xs text-slate-500">
+      Excel (.xlsx) or CSV, up to {{ max_rows|floatformat:"0g" }} people. Only the first sheet in the workbook is read.
+    </p>
+    <label class="mt-3 flex items-center gap-2 text-sm text-slate-700">
+      <input type="checkbox" name="has_headings" {% if form.has_headings %}checked{% endif %}
+             class="rounded border-slate-300 text-[#0065A9] focus:ring-[#0065A9]">
+      The first row has column headings (like "Name" or "Cell number")
+    </label>
+  </div>
+
+  <fieldset>
+    <legend class="text-sm font-medium text-slate-700">Put these people into</legend>
+
+    <label class="mt-3 flex items-center gap-2 text-sm text-slate-700">
+      <input type="radio" name="target" value="existing" x-model="target" {% if form.target == "existing" %}checked{% endif %}
+             {% if not audiences %}disabled{% endif %}
+             class="border-slate-300 text-[#0065A9] focus:ring-[#0065A9]">
+      An audience I already have
+    </label>
+    <div class="ml-6 mt-2" x-show="target === 'existing'">
+      {% if audiences %}
+        <select name="audience"
+                class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+          <option value="">Choose an audience…</option>
+          {% for audience in audiences %}
+            <option value="{{ audience.pk }}" {% if form.audience == audience.pk|stringformat:"d" %}selected{% endif %}>
+              {{ audience.name }} ({{ audience.member_count }} member{{ audience.member_count|pluralize }})
+            </option>
+          {% endfor %}
+        </select>
+        <p class="mt-1.5 text-xs text-slate-500">
+          Anyone already in this audience with the same cell number is skipped. If the spreadsheet
+          has a different name or surname for them, their name is updated.
+        </p>
+      {% else %}
+        <p class="text-xs text-slate-500">You have no audiences yet - create a new one below.</p>
+      {% endif %}
+    </div>
+
+    <label class="mt-4 flex items-center gap-2 text-sm text-slate-700">
+      <input type="radio" name="target" value="new" x-model="target" {% if form.target == "new" or not audiences %}checked{% endif %}
+             class="border-slate-300 text-[#0065A9] focus:ring-[#0065A9]">
+      A new audience
+    </label>
+    <div class="ml-6 mt-2 space-y-3" x-show="target === 'new'">
+      <input name="name" value="{{ form.name }}" maxlength="120" placeholder="Name, e.g. Launch attendees"
+             class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+      <input name="description" value="{{ form.description }}" maxlength="255" placeholder="Who belongs in this group? (optional)"
+             class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+    </div>
+  </fieldset>
+
+  <div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-5">
+    <a href="{% url 'contacts:audiences' %}" class="text-sm font-medium text-slate-500 hover:text-slate-700">Cancel</a>
+    <button class="rounded-xl bg-[#0065A9] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">
+      Next: match the columns
+    </button>
+  </div>
+</form>
+
+{% endblock %}

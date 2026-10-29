@@ -116,20 +116,15 @@
     </div>
 
     <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-      <h2 class="text-base font-semibold text-slate-900">Upload a spreadsheet</h2>
+      <h2 class="text-base font-semibold text-slate-900">Import from a spreadsheet</h2>
       <p class="mt-1.5 text-xs leading-relaxed text-slate-500">
-        A CSV with a <span class="font-mono">name</span> (or first_name / last_name) column and a
-        <span class="font-mono">mobile</span> column. People already in your contacts are matched
-        on their number, so uploading twice never duplicates anyone.
+        Upload an Excel file and match its columns to cell number, name and surname. People already
+        in this audience are skipped, or have their name updated if the spreadsheet spells it differently.
       </p>
-      <form method="post" action="{% url 'contacts:audience_import' audience.pk %}" enctype="multipart/form-data" class="mt-4">
-        {% csrf_token %}
-        <input type="file" name="file" accept=".csv,text/csv" required
-               class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0065A9]/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#0065A9] hover:file:bg-[#0065A9]/20">
-        <button class="mt-4 w-full rounded-xl bg-[#0065A9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">
-          Import into this audience
-        </button>
-      </form>
+      <a href="{% url 'contacts:audience_import' %}?audience={{ audience.pk }}"
+         class="mt-4 block w-full rounded-xl bg-[#0065A9] px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">
+        Import into this audience
+      </a>
     </div>
 
   </div>

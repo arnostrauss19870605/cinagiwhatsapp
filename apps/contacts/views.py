@@ -369,67 +369,160 @@ def audience_delete(request, pk):
     return redirect("contacts:audiences")
 
 
+# --- Importing people from a spreadsheet ------------------------------------
+# Step one reads the file and remembers its rows in the session; step two
+# shows the columns so the user can say which is which, then imports. Nothing
+# is written to the database until the user has seen the mapping.
+
+_IMPORT_KEY = "audience_import"
+
+
+def _pending_import(request):
+    pending = request.session.get(_IMPORT_KEY)
+    if not pending or pending.get("workspace") != request.workspace.pk:
+        return None
+    return pending
+
+
 @login_required
-@require_POST
-def audience_import(request, pk):
-    """Upload a CSV of people straight into this audience.
+def audience_import(request):
+    """Step one: choose the file and which audience it goes into."""
+    from .imports import MAX_ROWS, SheetError, read_sheet
 
-    Expected columns (header row, any order): name or first_name/last_name,
-    and mobile (or phone / msisdn / whatsapp). Existing contacts are matched
-    on their number, so re-importing updates membership without duplicating.
-    """
+    if request.workspace is None:
+        return redirect("workspaces:list")
     _manager(request)
-    audience = scoped_get_or_404(Audience, request, pk=pk)
+    audiences_here = Audience.objects.for_request(request).annotate(member_count=Count("contacts"))
+    form = {
+        "target": "existing" if audiences_here.exists() else "new",
+        "audience": request.GET.get("audience", ""),
+        "name": "",
+        "description": "",
+        "has_headings": True,
+    }
+    if request.method == "POST":
+        form = {
+            "target": "new" if request.POST.get("target") == "new" else "existing",
+            "audience": request.POST.get("audience", ""),
+            "name": (request.POST.get("name") or "").strip()[:120],
+            "description": (request.POST.get("description") or "").strip()[:255],
+            "has_headings": request.POST.get("has_headings") == "on",
+        }
+        error = None
+        audience = None
+        if form["target"] == "existing":
+            audience = audiences_here.filter(pk=form["audience"]).first() if form["audience"].isdigit() else None
+            if audience is None:
+                error = "Choose the audience these people should go into."
+        elif not form["name"]:
+            error = "Give the new audience a name."
+        elif audiences_here.filter(name__iexact=form["name"]).exists():
+            error = f"There is already an audience called '{form['name']}'. Choose it from the list instead."
 
-    upload = request.FILES.get("file")
-    if upload is None:
-        flash.error(request, "Choose a CSV file first.")
-        return redirect("contacts:audience_detail", pk=audience.pk)
-
-    try:
-        text = upload.read().decode("utf-8-sig")
-    except UnicodeDecodeError:
-        flash.error(request, "That file is not readable as a CSV. Save it as CSV and try again.")
-        return redirect("contacts:audience_detail", pk=audience.pk)
-
-    reader = csv.DictReader(io.StringIO(text))
-    fields = {name.lower().strip(): name for name in (reader.fieldnames or [])}
-
-    def value(row, *keys):
-        for key in keys:
-            if key in fields:
-                return (row.get(fields[key], "") or "").strip()
-        return ""
-
-    added = created = skipped = 0
-    for row in reader:
-        msisdn = normalise_msisdn(
-            value(row, "mobile", "phone", "msisdn", "whatsapp", "cell", "number")
-        )
-        if not msisdn:
-            skipped += 1
-            continue
-        name = value(row, "name", "full_name") or " ".join(
-            part for part in (value(row, "first_name"), value(row, "last_name")) if part
-        )
-        contact, was_created = Contact.objects.get_or_create(
-            workspace=request.workspace,
-            wa_id=msisdn,
-            defaults={"display_name": name},
-        )
-        if not was_created and name and not contact.display_name:
-            contact.display_name = name
-            contact.save(update_fields=["display_name"])
-        audience.contacts.add(contact)
-        added += 1
-        created += 1 if was_created else 0
-
-    audit(
-        "audience.imported", request=request, target=audience,
-        added=added, created=created, skipped=skipped,
+        upload = request.FILES.get("file")
+        if error is None and upload is None:
+            error = "Choose a spreadsheet to upload."
+        if error is None:
+            try:
+                headings, rows = read_sheet(upload, has_headings=form["has_headings"])
+            except SheetError as exc:
+                error = str(exc)
+        if error:
+            flash.error(request, error)
+        else:
+            request.session[_IMPORT_KEY] = {
+                "workspace": request.workspace.pk,
+                "audience": audience.pk if audience else None,
+                "new_name": form["name"] if audience is None else "",
+                "new_description": form["description"] if audience is None else "",
+                "filename": upload.name[:200],
+                "headings": headings,
+                "rows": rows,
+                "first_row": 2 if form["has_headings"] else 1,
+            }
+            return redirect("contacts:audience_import_map")
+    return render(
+        request,
+        "contacts/audience_import.html",
+        {"audiences": audiences_here, "form": form, "max_rows": MAX_ROWS},
     )
-    note = f"{added} added to '{audience.name}' ({created} new)."
-    if skipped:
-        note += f" {skipped} row(s) had no usable mobile number and were left out."
-    flash.success(request, note)
-    return redirect("contacts:audience_detail", pk=audience.pk)
+
+
+@login_required
+def audience_import_map(request):
+    """Step two: say which column is the number and which are the names, then import."""
+    from .imports import FIELDS, guess_mapping, import_rows
+
+    if request.workspace is None:
+        return redirect("workspaces:list")
+    _manager(request)
+    pending = _pending_import(request)
+    if pending is None:
+        flash.info(request, "Upload the spreadsheet again - that import has already finished or has expired.")
+        return redirect("contacts:audience_import")
+
+    audience = None
+    if pending["audience"]:
+        audience = Audience.objects.for_request(request).filter(pk=pending["audience"]).first()
+        if audience is None:
+            request.session.pop(_IMPORT_KEY, None)
+            flash.error(request, "That audience no longer exists. Start the import again.")
+            return redirect("contacts:audience_import")
+
+    headings = pending["headings"]
+    columns = list(enumerate(headings))
+    mapping = guess_mapping(headings)
+
+    if request.method == "POST":
+        def chosen(key):
+            raw = request.POST.get(key, "")
+            return int(raw) if raw.isdigit() and int(raw) < len(headings) else None
+
+        mapping = {key: chosen(key) for key, _label in FIELDS}
+        if mapping["mobile"] is None:
+            flash.error(request, "Choose the column that holds the mobile numbers.")
+        else:
+            if audience is None:
+                name = pending["new_name"]
+                if Audience.objects.for_request(request).filter(name__iexact=name).exists():
+                    request.session.pop(_IMPORT_KEY, None)
+                    flash.error(request, f"Someone else has just created an audience called '{name}'. Start the import again.")
+                    return redirect("contacts:audience_import")
+                audience = Audience.objects.create(
+                    workspace=request.workspace, name=name, description=pending["new_description"],
+                )
+                audit("audience.created", request=request, target=audience, name=name)
+            result = import_rows(
+                request.workspace, audience, pending["rows"], mapping,
+                first_row_number=pending["first_row"],
+            )
+            request.session.pop(_IMPORT_KEY, None)
+            audit(
+                "audience.imported", request=request, target=audience,
+                file=pending["filename"],
+                columns={key: headings[index] for key, index in mapping.items() if index is not None},
+                added=result.added, created=result.created, renamed=len(result.updated),
+                unchanged=result.unchanged, repeated=result.repeated, unusable=len(result.unusable),
+            )
+            return render(
+                request,
+                "contacts/audience_import_done.html",
+                {"audience": audience, "result": result, "filename": pending["filename"]},
+            )
+
+    fields = [
+        {"key": key, "label": label, "selected": mapping.get(key)}
+        for key, label in FIELDS
+    ]
+    return render(
+        request,
+        "contacts/audience_import_map.html",
+        {
+            "pending": pending,
+            "audience": audience,
+            "columns": columns,
+            "fields": fields,
+            "preview": pending["rows"][:5],
+            "row_count": len(pending["rows"]),
+        },
+    )

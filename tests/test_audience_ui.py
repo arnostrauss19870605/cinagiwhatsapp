@@ -114,38 +114,140 @@ class AudiencePageTests(AudienceUiBase):
         self.assertEqual(audience.contacts.count(), 0)
 
 
-class AudienceImportTests(AudienceUiBase):
-    def _upload(self, content):
-        audience = Audience.objects.create(workspace=self.workspace, name="Launch attendees")
-        upload = BytesIO(content.encode("utf-8"))
-        upload.name = "guests.csv"
-        self.client.post(
-            reverse("contacts:audience_import", args=[audience.pk]), {"file": upload}
-        )
-        return audience
+def _xlsx(rows):
+    from openpyxl import Workbook
 
-    def test_a_csv_creates_contacts_and_membership(self):
-        audience = self._upload(
-            "name,mobile\nThabo Mokoena,072 612 4698\nAnn Botha,+27 83 123 4567\n"
+    book = Workbook()
+    for row in rows:
+        book.active.append(row)
+    buffer = BytesIO()
+    book.save(buffer)
+    buffer.seek(0)
+    buffer.name = "guests.xlsx"
+    return buffer
+
+
+class AudienceImportTests(AudienceUiBase):
+    """Spreadsheet import: upload, match columns, import.
+
+    The sheet's columns are deliberately not called "name" and "mobile" -
+    the point of the mapping step is that people's own spreadsheets work.
+    """
+
+    SHEET = [
+        ["Ref", "Naam", "Van", "Cell No"],
+        ["A1", "Thabo", "Mokoena", "072 612 4698"],
+        ["A2", "Ann", "Botha", 831234567],  # Excel dropped the leading zero
+        ["A3", "No", "Number", ""],
+        ["A4", "Thabo", "Again", "+27 72 612 4698"],
+    ]
+    MAPPING = {"mobile": "3", "first_name": "1", "last_name": "2", "full_name": ""}
+
+    def setUp(self):
+        super().setUp()
+        self.audience = Audience.objects.create(workspace=self.workspace, name="Launch attendees")
+
+    def _upload(self, rows=None, **form):
+        data = {"target": "existing", "audience": self.audience.pk, "has_headings": "on",
+                "file": _xlsx(rows or self.SHEET)}
+        data.update(form)
+        return self.client.post(reverse("contacts:audience_import"), data)
+
+    def _import(self, mapping=None, **form):
+        self._upload(**form)
+        return self.client.post(reverse("contacts:audience_import_map"), mapping or self.MAPPING)
+
+    def test_upload_shows_the_columns_with_a_sensible_guess(self):
+        response = self._upload()
+        self.assertRedirects(response, reverse("contacts:audience_import_map"))
+        page = self.client.get(reverse("contacts:audience_import_map"))
+        self.assertContains(page, "Cell No")
+        self.assertEqual(
+            {f["key"]: f["selected"] for f in page.context["fields"]},
+            {"mobile": 3, "full_name": None, "first_name": 1, "last_name": 2},
         )
-        self.assertEqual(audience.contacts.count(), 2)
+        self.assertEqual(Contact.objects.count(), 0, "nothing is written before the mapping")
+
+    def test_mapped_columns_create_contacts_and_membership(self):
+        response = self._import()
+        self.assertEqual(response.status_code, 200)
+        result = response.context["result"]
+        self.assertEqual((result.added, result.created, result.repeated), (2, 2, 1))
+        self.assertEqual([row for row, _ in result.unusable], [4])
         thabo = Contact.objects.get(wa_id="27726124698")
         self.assertEqual(thabo.display_name, "Thabo Mokoena")
+        self.assertEqual(thabo.attributes, {"first_name": "Thabo", "last_name": "Mokoena"})
+        self.assertTrue(self.audience.contacts.filter(wa_id="27831234567").exists())
 
-    def test_reimporting_never_duplicates(self):
-        content = "first_name,last_name,phone\nThabo,Mokoena,0726124698\n"
-        audience = self._upload(content)
-        upload = BytesIO(content.encode("utf-8"))
-        upload.name = "guests.csv"
-        self.client.post(
-            reverse("contacts:audience_import", args=[audience.pk]), {"file": upload}
-        )
+    def test_existing_members_are_skipped_or_renamed(self):
+        same = Contact.objects.create(workspace=self.workspace, wa_id="27726124698", display_name="Thabo Mokoena")
+        renamed = Contact.objects.create(workspace=self.workspace, wa_id="27831234567", display_name="Ann Smit")
+        self.audience.contacts.add(same, renamed)
+        result = self._import().context["result"]
+        self.assertEqual((result.added, result.unchanged), (0, 1))
+        self.assertEqual(result.updated, [("+27831234567", "Ann Smit", "Ann Botha")])
+        renamed.refresh_from_db()
+        self.assertEqual(renamed.display_name, "Ann Botha")
+        self.assertEqual(Contact.objects.count(), 2)
+        self.assertEqual(self.audience.contacts.count(), 2)
+
+    def test_a_contact_outside_the_audience_is_added_not_duplicated(self):
+        Contact.objects.create(workspace=self.workspace, wa_id="27726124698", profile_name="T")
+        result = self._import().context["result"]
+        self.assertEqual((result.added, result.created), (2, 1))
         self.assertEqual(Contact.objects.filter(wa_id="27726124698").count(), 1)
-        self.assertEqual(audience.contacts.count(), 1)
 
-    def test_rows_without_a_number_are_left_out(self):
-        audience = self._upload("name,mobile\nNo Number,\n")
-        self.assertEqual(audience.contacts.count(), 0)
+    def test_a_new_audience_is_only_created_when_the_import_runs(self):
+        self._upload(target="new", name="Press list", audience="")
+        self.assertFalse(Audience.objects.filter(name="Press list").exists())
+        self.client.post(reverse("contacts:audience_import_map"), self.MAPPING)
+        self.assertEqual(Audience.objects.get(name="Press list").contacts.count(), 2)
+
+    def test_a_new_audience_may_not_reuse_a_name(self):
+        self._upload(target="new", name="launch ATTENDEES", audience="")
+        response = self.client.get(reverse("contacts:audience_import_map"))
+        self.assertRedirects(response, reverse("contacts:audience_import"))
+
+    def test_a_single_name_column_is_read_as_the_whole_name(self):
+        from apps.contacts.imports import guess_mapping
+
+        self.assertEqual(
+            guess_mapping(["Name", "Cell"]),
+            {"mobile": 1, "full_name": 0, "first_name": None, "last_name": None},
+        )
+
+    def test_the_number_column_is_required(self):
+        self._upload()
+        self.client.post(reverse("contacts:audience_import_map"), {**self.MAPPING, "mobile": ""})
+        self.assertEqual(Contact.objects.count(), 0)
+
+    def test_a_csv_still_works(self):
+        upload = BytesIO(b"name;cell\nThabo Mokoena;0726124698\n")
+        upload.name = "guests.csv"
+        self._upload(file=upload)
+        self.client.post(reverse("contacts:audience_import_map"), {"mobile": "1", "full_name": "0"})
+        self.assertEqual(self.audience.contacts.get().display_name, "Thabo Mokoena")
+
+    def test_an_old_excel_file_is_refused_in_plain_language(self):
+        upload = BytesIO(b"junk")
+        upload.name = "guests.xls"
+        response = self._upload(file=upload)
+        self.assertContains(response, "old-style Excel file")
+
+    def test_an_agent_may_not_import(self):
+        self.client.force_login(self.agent)
+        self.assertEqual(self._upload().status_code, 403)
+
+    def test_another_workspaces_audience_cannot_be_the_target(self):
+        other = Workspace.objects.create(name="Elsewhere")
+        theirs = Audience.objects.create(workspace=other, name="Theirs")
+        response = self._upload(audience=theirs.pk)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("audience_import", self.client.session)
+
+    def test_the_mapping_step_without_an_upload_starts_over(self):
+        response = self.client.get(reverse("contacts:audience_import_map"))
+        self.assertRedirects(response, reverse("contacts:audience_import"))
 
 
 @override_settings(OUTBOUND_COMMS_MODE="live", CELERY_TASK_ALWAYS_EAGER=True)

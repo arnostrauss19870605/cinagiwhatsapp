@@ -62,6 +62,7 @@ pages = [
  ("send template form",f"/inbox/{conv2.pk}/send-template/?template_id={MessageTemplate.objects.first().pk}"),
  ("analytics","/analytics/"),("analytics 7 days","/analytics/?days=7"),
  ("new template","/library/templates/new/"),
+ ("audiences","/contacts/audiences/"),("audience import","/contacts/audiences/import/"),
  ("questions","/questions/"),("new question","/questions/new/"),("prize draw","/questions/prize-draw/"),
  ("users","/accounts/users/"),("new user","/accounts/users/new/"),(f"edit user","/accounts/users/1/"),
  ("healthz","/healthz"),

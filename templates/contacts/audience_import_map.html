@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Match your columns{% endblock %}
+{% block content %}
+
+<nav class="text-sm text-slate-500">
+  <a href="{% url 'contacts:audiences' %}" class="hover:text-[#0065A9]">Audiences</a>
+  <span class="mx-1.5">/</span>
+  <a href="{% url 'contacts:audience_import' %}" class="hover:text-[#0065A9]">Import from a spreadsheet</a>
+  <span class="mx-1.5">/</span>
+  <span class="text-slate-800">Match your columns</span>
+</nav>
+
+<div class="mt-4">
+  <p class="text-xs font-semibold uppercase tracking-[.2em] text-slate-400">Step 2 of 2</p>
+  <h1 class="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Match your columns</h1>
+  <p class="mt-1.5 max-w-2xl text-sm text-slate-500">
+    <span class="font-medium text-slate-700">{{ pending.filename }}</span> has
+    <span class="num">{{ row_count }}</span> row{{ row_count|pluralize }}. They will go into
+    {% if audience %}
+      <a href="{% url 'contacts:audience_detail' audience.pk %}" class="font-medium text-[#0065A9] hover:underline">{{ audience.name }}</a>.
+    {% else %}
+      a new audience called <span class="font-medium text-slate-700">{{ pending.new_name }}</span>.
+    {% endif %}
+    We have guessed which column is which - check it, and change anything that is wrong.
+  </p>
+</div>
+
+<form method="post" class="mt-8 grid gap-8 lg:grid-cols-3">
+  {% csrf_token %}
+
+  <div class="space-y-5 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    {% for field in fields %}
+      <label class="block text-sm font-medium text-slate-700">
+        {{ field.label }}{% if field.key == "mobile" %} <span class="text-rose-500">*</span>{% endif %}
+        <select name="{{ field.key }}" {% if field.key == "mobile" %}required{% endif %}
+                class="mt-1.5 w-full rounded-xl border-slate-300 text-sm font-normal shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+          <option value="">{% if field.key == "mobile" %}Choose a column…{% else %}Not in my spreadsheet{% endif %}</option>
+          {% for index, heading in columns %}
+            <option value="{{ index }}" {% if field.selected == index %}selected{% endif %}>{{ heading }}</option>
+          {% endfor %}
+        </select>
+        {% if field.key == "mobile" %}
+          <span class="mt-1 block text-xs font-normal text-slate-500">
+            082 123 4567, +27 82 123 4567 and 27821234567 all work. Numbers without a country code are read as South African.
+          </span>
+        {% elif field.key == "full_name" %}
+          <span class="mt-1 block text-xs font-normal text-slate-500">
+            Use this if one column holds the whole name. Otherwise use Name and Surname below.
+          </span>
+        {% endif %}
+      </label>
+    {% endfor %}
+
+    <div class="rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
+      <p class="font-semibold text-slate-700">What happens to each person</p>
+      <ul class="mt-1.5 list-disc space-y-1 pl-4">
+        <li>Already in the audience with the same name: skipped.</li>
+        <li>Already in the audience with a different name or surname: their name is updated.</li>
+        <li>Not in the audience yet: added. If we have never spoken to them, they become a new contact.</li>
+        <li>No usable cell number: left out, and listed afterwards so you can fix them.</li>
+      </ul>
+    </div>
+
+    <div class="flex items-center justify-between gap-3 border-t border-slate-100 pt-5">
+      <a href="{% url 'contacts:audience_import' %}" class="text-sm font-medium text-slate-500 hover:text-slate-700">Start again</a>
+      <button class="rounded-xl bg-[#0065A9] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">
+        Import <span class="num">{{ row_count }}</span> row{{ row_count|pluralize }}
+      </button>
+    </div>
+  </div>
+
+  <div class="lg:col-span-2">
+    <h2 class="text-sm font-semibold text-slate-700">The first few rows of your spreadsheet</h2>
+    <div class="mt-3 overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <tr>{% for index, heading in columns %}<th class="whitespace-nowrap px-4 py-3">{{ heading }}</th>{% endfor %}</tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for row in preview %}
+            <tr>{% for cell in row %}<td class="whitespace-nowrap px-4 py-2.5 text-slate-700">{{ cell }}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+
+{% endblock %}

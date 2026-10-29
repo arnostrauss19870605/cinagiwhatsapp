@@ -74,6 +74,17 @@
         Create audience
       </button>
     </form>
+    <div class="mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-base font-semibold text-slate-900">Import from a spreadsheet</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-slate-500">
+        Have your people in Excel already? Upload the file, match its columns, and put everyone into a
+        new audience or one you already have.
+      </p>
+      <a href="{% url 'contacts:audience_import' %}"
+         class="mt-4 block w-full rounded-xl border border-slate-300 px-4 py-2.5 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+        Import from Excel
+      </a>
+    </div>
   </div>
 </div>
 
