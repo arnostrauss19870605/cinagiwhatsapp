@@ -272,7 +272,11 @@ class RsvpConfirmationTests(TestCase):
         self.url = f"/e/register/{self.event.pk}/"
 
     def _post(self, payload):
+        # The real template's send window ends on the event date; these tests
+        # are about the form triggering the send, not about the calendar.
         with mock.patch(
+            "apps.library.event_templates.sendable_on", return_value=(True, ""),
+        ), mock.patch(
             "apps.channels_wa.messaging.meta_cloud.MetaCloudChannel.send_template",
             return_value=SendResult(ok=True, wamid="wamid.CONFIRM"),
         ) as send:

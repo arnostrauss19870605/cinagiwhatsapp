@@ -34,7 +34,7 @@ class ReportingTests(TestCase):
         self.template = MessageTemplate.objects.create(
             workspace=self.workspace,
             channel=self.channel,
-            name="event_invite",
+            name="launch_invite",
             language="en",
             status=MessageTemplate.Status.APPROVED,
             components=[{"type": "BODY", "text": "Hi {{1}}, join us on {{2}}."}],
@@ -62,7 +62,7 @@ class ReportingTests(TestCase):
     def test_a_bulk_send_is_recorded_and_its_messages_point_back_to_it(self):
         batch = self._run_bulk_send()
         self.assertEqual(batch.status, BulkSend.Status.DONE)
-        self.assertEqual(batch.template_name, "event_invite")
+        self.assertEqual(batch.template_name, "launch_invite")
         self.assertEqual(batch.audience_names, ["Launch attendees"])
         self.assertEqual(batch.recipient_count, 2)
         self.assertEqual(batch.sent_count, 2)
@@ -136,7 +136,7 @@ class ReportingTests(TestCase):
         self.assertEqual(len(response.context["daily"]), 30)
         self.assertEqual(sum(d["out"] for d in response.context["daily"]), 3)
         template_row = response.context["template_rows"][0]
-        self.assertEqual((template_row["name"], template_row["sent"], template_row["replied"]), ("event_invite", 2, 1))
+        self.assertEqual((template_row["name"], template_row["sent"], template_row["replied"]), ("launch_invite", 2, 1))
         self.assertEqual(response.context["agent_rows"][0]["replies"], 1)
         self.assertEqual(len(response.context["batches"]), 1)
         self.assertContains(response, "Launch attendees")
