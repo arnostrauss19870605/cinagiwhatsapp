@@ -14,6 +14,48 @@ from apps.channels_wa.outbound import send_template
 from apps.inbox.models import Conversation, Message
 from apps.library.drafts import values_for
 
+MEDIA_MIME = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".mp4": "video/mp4",
+}
+
+# What WhatsApp accepts in each kind of template header. Meta takes the
+# upload whatever it is and only fails each message afterwards, so a
+# mismatch has to be caught here, before anyone is messaged.
+HEADER_FILES = {
+    "IMAGE": ({"image/jpeg", "image/png"}, 5, "an image (JPG or PNG)"),
+    "VIDEO": ({"video/mp4"}, 16, "a video (MP4)"),
+    "DOCUMENT": ({"application/pdf"}, 100, "a PDF"),
+}
+
+
+def header_file_problem(header_format, filename, size=None):
+    """A plain-language reason this file cannot go in this header, or None.
+
+    `size` is in bytes; pass None for a link, whose size we cannot know.
+    A link is only refused when its ending is clearly the wrong kind of file;
+    a page address like ".../download?id=7" can still serve a proper image.
+    """
+    from pathlib import Path
+
+    rule = HEADER_FILES.get((header_format or "").upper())
+    if rule is None:
+        return None
+    allowed, max_mb, wanted = rule
+    suffix = Path((filename or "").split("?")[0]).suffix.lower()
+    mime = MEDIA_MIME.get(suffix)
+    if mime is None and size is None:
+        return None
+    if mime not in allowed:
+        what = f"a {suffix.lstrip('.').upper()} file" if suffix else "that file"
+        return f"This template's header needs {wanted}, but {what} was attached. WhatsApp would reject it for every person."
+    if size is not None and size > max_mb * 1024 * 1024:
+        return f"That file is {size / 1024 / 1024:.1f} MB. WhatsApp only accepts up to {max_mb} MB for this kind of header."
+    return None
+
 
 def first_name_of(contact):
     name = (contact.display_name or contact.profile_name or "").strip()

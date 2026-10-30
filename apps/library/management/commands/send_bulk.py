@@ -18,13 +18,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
-MEDIA_MIME = {
-    ".pdf": "application/pdf",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".mp4": "video/mp4",
-}
+from apps.library.bulk import MEDIA_MIME, header_file_problem
 
 
 class Command(BaseCommand):
@@ -161,14 +155,18 @@ class Command(BaseCommand):
             )
         source = options["media"]
         if source.startswith("http"):
+            problem = header_file_problem(header, source)
+            if problem:
+                raise CommandError(problem)
             media = {"link": source}
         else:
             path = Path(source)
             if not path.exists():
                 raise CommandError(f"No such file: {source}")
-            mime = MEDIA_MIME.get(path.suffix.lower())
-            if mime is None:
-                raise CommandError(f"Unsupported file type: {path.suffix}")
+            problem = header_file_problem(header, path.name, path.stat().st_size)
+            if problem:
+                raise CommandError(problem)
+            mime = MEDIA_MIME[path.suffix.lower()]
             if options["dry_run"]:
                 media = {"id": "<uploaded on the real run>"}
             else:

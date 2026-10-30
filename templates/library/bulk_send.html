@@ -29,7 +29,7 @@
       <option value="">Choose an approved message…</option>
       {% for t in templates %}
         <option value="{{ t.pk }}" {% if chosen and chosen.pk == t.pk %}selected{% endif %}>
-          {{ t.name }} ({{ t.get_category_display|lower }}{% if t.header_format == 'DOCUMENT' %}, with a PDF{% elif t.header_format == 'IMAGE' %}, with an image{% endif %})
+          {{ t.name }} ({{ t.get_category_display|lower }}{% if t.header_format == 'DOCUMENT' %}, with a PDF{% elif t.header_format == 'IMAGE' %}, with an image{% elif t.header_format == 'VIDEO' %}, with a video{% endif %})
         </option>
       {% endfor %}
     </select>
@@ -109,9 +109,14 @@
         <label class="block text-sm font-semibold text-slate-900">
           Attach the {{ chosen.header_format|lower }}
         </label>
-        <p class="mt-1 text-xs text-slate-500">Upload a file, or paste an https link to one already online. Everyone receives the same file.</p>
+        <p class="mt-1 text-xs text-slate-500">
+          This template needs
+          {% if chosen.header_format == 'IMAGE' %}<span class="font-semibold text-slate-700">a JPG or PNG image, up to 5 MB</span>{% elif chosen.header_format == 'VIDEO' %}<span class="font-semibold text-slate-700">an MP4 video, up to 16 MB</span>{% else %}<span class="font-semibold text-slate-700">a PDF, up to 100 MB</span>{% endif %}
+          - any other kind of file is rejected by WhatsApp. Upload one, or paste an https link to one already online. Everyone receives the same file.
+        </p>
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <input type="file" name="media_file"
+                 accept="{% if chosen.header_format == 'IMAGE' %}.jpg,.jpeg,.png,image/jpeg,image/png{% elif chosen.header_format == 'VIDEO' %}.mp4,video/mp4{% else %}.pdf,application/pdf{% endif %}"
                  class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0065A9]/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#0065A9] hover:file:bg-[#0065A9]/20">
           <input type="url" name="media_url" placeholder="https://…"
                  class="w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">

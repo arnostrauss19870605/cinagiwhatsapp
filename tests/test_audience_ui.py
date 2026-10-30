@@ -317,6 +317,61 @@ class BulkSendUiTests(AudienceUiBase):
         send.assert_not_called()
         self.assertContains(response, "attach a file or paste an https link")
 
+    def _image_template(self):
+        self.template.components = [
+            {"type": "HEADER", "format": "IMAGE"},
+            {"type": "BODY", "text": "Hi {{1}}"},
+        ]
+        self.template.save(update_fields=["components"])
+
+    def test_a_video_on_an_image_template_is_refused_before_anything_is_sent(self):
+        # Meta accepts the upload and then fails every message, so this must be caught here.
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from apps.library.models import BulkSend
+
+        self._image_template()
+        with mock.patch(
+            "apps.channels_wa.messaging.meta_cloud.MetaCloudChannel.upload_media"
+        ) as upload, mock.patch(
+            "apps.channels_wa.messaging.meta_cloud.MetaCloudChannel.send_template"
+        ) as send:
+            response = self.client.post(reverse("library:bulk_send"), {
+                "template": self.template.pk,
+                "audiences": [self.audience.pk],
+                "media_file": SimpleUploadedFile("promo.mp4", b"x" * 10, content_type="video/mp4"),
+            }, follow=True)
+        upload.assert_not_called()
+        send.assert_not_called()
+        self.assertFalse(BulkSend.objects.exists())
+        self.assertContains(response, "needs an image (JPG or PNG), but a MP4 file was attached")
+
+    def test_a_link_to_the_wrong_kind_of_file_is_refused(self):
+        self._image_template()
+        with mock.patch(
+            "apps.channels_wa.messaging.meta_cloud.MetaCloudChannel.send_template"
+        ) as send:
+            response = self.client.post(reverse("library:bulk_send"), {
+                "template": self.template.pk,
+                "audiences": [self.audience.pk],
+                "media_url": "https://example.com/promo.mp4",
+            }, follow=True)
+        send.assert_not_called()
+        self.assertContains(response, "needs an image")
+
+
+class HeaderFileRuleTests(TestCase):
+    def test_the_rules(self):
+        from apps.library.bulk import header_file_problem
+
+        self.assertIsNone(header_file_problem("IMAGE", "poster.JPG", 1024))
+        self.assertIsNone(header_file_problem("VIDEO", "promo.mp4", 1024))
+        self.assertIsNone(header_file_problem("DOCUMENT", "agenda.pdf", 1024))
+        self.assertIsNone(header_file_problem("IMAGE", "https://cdn.example.com/get?id=7"))
+        self.assertIn("needs a PDF", header_file_problem("DOCUMENT", "poster.png", 1024))
+        self.assertIn("needs a video", header_file_problem("VIDEO", "notes.docx", 1024))
+        self.assertIn("up to 5 MB", header_file_problem("IMAGE", "big.png", 6 * 1024 * 1024))
+
 
 class AddNewPersonTests(AudienceUiBase):
     def test_a_person_who_never_messaged_can_be_created_straight_into_an_audience(self):

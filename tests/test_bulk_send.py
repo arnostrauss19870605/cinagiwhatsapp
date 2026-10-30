@@ -96,7 +96,7 @@ class BulkSendTests(TestCase):
         self.template = MessageTemplate.objects.create(
             workspace=self.workspace,
             channel=self.channel,
-            name="event_agenda",
+            name="launch_agenda",
             language="en",
             status=MessageTemplate.Status.APPROVED,
             components=[
@@ -123,7 +123,7 @@ class BulkSendTests(TestCase):
         ) as send:
             call_command(
                 "send_bulk", "--pause", "0",
-                "--template", "event_agenda",
+                "--template", "launch_agenda",
                 "--media", "https://brokers.cinagi.co.za/media/agenda.pdf",
                 "--value", "Wednesday 30 September",
                 *args, stdout=out,
@@ -172,15 +172,25 @@ class BulkSendTests(TestCase):
         with self.assertRaises(CommandError) as caught:
             call_command(
                 "send_bulk", "--audience", "Launch attendees",
-                "--template", "event_agenda", "--value", "x", "--pause", "0",
+                "--template", "launch_agenda", "--value", "x", "--pause", "0",
             )
         self.assertIn("--media", str(caught.exception))
+
+    def test_the_wrong_kind_of_file_is_refused_before_sending(self):
+        with self.assertRaises(CommandError) as caught:
+            call_command(
+                "send_bulk", "--audience", "Launch attendees",
+                "--template", "launch_agenda", "--value", "x", "--pause", "0",
+                "--media", "https://x/promo.mp4",
+            )
+        self.assertIn("needs a PDF", str(caught.exception))
+        self.assertFalse(Message.objects.exists())
 
     def test_wrong_value_count_is_a_plain_error(self):
         with self.assertRaises(CommandError) as caught:
             call_command(
                 "send_bulk", "--audience", "Launch attendees",
-                "--template", "event_agenda", "--pause", "0",
+                "--template", "launch_agenda", "--pause", "0",
                 "--media", "https://x/a.pdf",
             )
         self.assertIn("takes 2 value", str(caught.exception))

@@ -246,15 +246,6 @@ def draft_delete(request, pk):
     return redirect("library:templates")
 
 
-MEDIA_MIME = {
-    ".pdf": "application/pdf",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".mp4": "video/mp4",
-}
-
-
 @login_required
 def bulk_send(request):
     """Send an approved template to whole audiences, in the background.
@@ -362,13 +353,16 @@ def _resolve_header_media(request, template):
     """The header file or link for an image/document/video template."""
     from pathlib import Path
 
+    from apps.library.bulk import MEDIA_MIME, header_file_problem
+
     kind = template.header_format.lower()
     upload = request.FILES.get("media_file")
     link = (request.POST.get("media_url") or "").strip()
     if upload:
-        mime = MEDIA_MIME.get(Path(upload.name).suffix.lower())
-        if mime is None:
-            return None, "That file type cannot be sent. Use a PDF, JPG, PNG or MP4."
+        problem = header_file_problem(template.header_format, upload.name, upload.size)
+        if problem:
+            return None, problem
+        mime = MEDIA_MIME[Path(upload.name).suffix.lower()]
         channel = template.channel
         try:
             media_id = channel.client().upload_media(upload, mime)
@@ -381,6 +375,9 @@ def _resolve_header_media(request, template):
             media["filename"] = upload.name
         return media, None
     if link.startswith("https://"):
+        problem = header_file_problem(template.header_format, link)
+        if problem:
+            return None, problem
         media = {"link": link}
         if kind == "document":
             media["filename"] = Path(link).name or "document.pdf"
