@@ -198,6 +198,9 @@ def send_template(request, pk):
 
 
 def _claim(request, conversation, reason, detail=""):
+    from apps.workflows.engine import stop
+
+    stop(conversation, f"{request.user} took the chat")
     previous = conversation.assigned_to
     conversation.assigned_to = request.user
     conversation.assigned_at = timezone.now()
@@ -244,6 +247,9 @@ def release(request, pk):
 @login_required
 def resolve(request, pk):
     conversation = scoped_get_or_404(Conversation, request, pk=pk)
+    from apps.workflows.engine import stop
+
+    stop(conversation, f"{request.user} resolved the chat")
     conversation.status = Conversation.Status.RESOLVED
     conversation.resolved_at = timezone.now()
     conversation.resolved_by = request.user

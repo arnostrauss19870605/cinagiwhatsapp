@@ -53,6 +53,22 @@
   </div>
 </div>
 
+{% with run=conversation.workflow_run %}
+  {% if run %}
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-sky-200 bg-sky-50 px-4 py-2 text-xs text-sky-900">
+      <span>
+        <strong>Workflow running:</strong> {{ run.workflow.name }}
+        {% with step=run.step %}{% if step %} &middot; {% if run.status == 'waiting' %}waiting for an answer to{% else %}at{% endif %} &ldquo;{{ step.name }}&rdquo;{% endif %}{% endwith %}.
+        Replying or taking the chat stops it.
+      </span>
+      <form method="post" action="{% url 'workflows:stop_conversation' conversation.pk %}">
+        {% csrf_token %}
+        <button class="rounded-lg border border-sky-300 bg-white px-2.5 py-1 font-semibold hover:bg-sky-100">Stop workflow</button>
+      </form>
+    </div>
+  {% endif %}
+{% endwith %}
+
 <!-- messages -->
 <div class="flex-1 space-y-2 overflow-y-auto px-4 py-4" id="messages">
   {% for message in conversation.messages.all %}

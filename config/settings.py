@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "apps.integrations",
     "apps.reporting",
     "apps.questions",
+    "apps.workflows",
 ]
 
 MIDDLEWARE = [
@@ -201,6 +202,7 @@ CELERY_TASK_ROUTES = {
     "apps.events.tasks.send_rsvp_confirmation": {"queue": "outbound"},
     "apps.library.tasks.run_bulk_send": {"queue": "outbound"},
     "apps.library.tasks.run_bulk_resend": {"queue": "outbound"},
+    "apps.workflows.tasks.expire_waiting_runs": {"queue": "default"},
     "apps.ai.*": {"queue": "ai"},
 }
 

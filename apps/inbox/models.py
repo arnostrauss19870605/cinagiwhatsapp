@@ -135,6 +135,13 @@ class Conversation(WorkspaceScopedModel, TimeStampedModel):
     def is_open(self):
         return self.status in self.OPEN_STATUSES
 
+    @property
+    def workflow_run(self):
+        """The workflow currently talking to this customer, if any."""
+        from apps.workflows.engine import live_run
+
+        return live_run(self)
+
     def touch_inbound(self, at=None):
         at = at or timezone.now()
         self.last_inbound_at = at

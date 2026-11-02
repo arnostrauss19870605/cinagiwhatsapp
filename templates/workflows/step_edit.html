@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}{{ step.name }} · {{ workflow.name }}{% endblock %}
+{% block content %}
+{% with kind=step.type field="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]" %}
+
+<nav class="text-sm text-slate-500">
+  <a href="{% url 'workflows:list' %}" class="hover:text-[#0065A9]">Workflows</a>
+  <span class="mx-1.5">/</span>
+  <a href="{% url 'workflows:detail' workflow.pk %}#step-{{ step_id }}" class="hover:text-[#0065A9]">{{ workflow.name }}</a>
+  <span class="mx-1.5">/</span>
+  <span class="text-slate-800">{{ step.name }}</span>
+</nav>
+
+<div class="mt-4">
+  <p class="text-[11px] font-semibold uppercase tracking-wider text-[#0065A9]">{{ label }}</p>
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900">{{ step.name }}</h1>
+  <p class="mt-1 text-sm text-slate-500">Changes are saved to a draft. Nothing changes for customers until you publish.</p>
+</div>
+
+<form method="post" class="mt-6 max-w-3xl space-y-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+  {% csrf_token %}
+  <label class="block text-sm font-medium text-slate-700">Step name <span class="font-normal text-slate-400">(for the team; customers never see it)</span>
+    <input name="name" value="{{ step.name }}" maxlength="120" class="{{ field }}">
+  </label>
+
+  {% if kind == "send_message" %}
+    <label class="block text-sm font-medium text-slate-700">Message
+      <textarea name="text" rows="6" class="{{ field }}">{{ config.text }}</textarea>
+      <span class="mt-1 block text-xs font-normal text-slate-500">With a file, this becomes the caption under it. *bold* and _italic_ work as in WhatsApp.</span>
+    </label>
+    <label class="block text-sm font-medium text-slate-700">File to send <span class="font-normal text-slate-400">(optional)</span>
+      <select name="file_id" class="{{ field }}">
+        <option value="">No file</option>
+        {% for f in files %}<option value="{{ f.pk }}" {% if config.file_id == f.pk %}selected{% endif %}>{{ f.filename }}</option>{% endfor %}
+      </select>
+      <span class="mt-1 block text-xs font-normal text-slate-500"><a href="{% url 'workflows:files' %}" class="text-[#0065A9] hover:underline">Upload files</a> first to choose them here.</span>
+    </label>
+
+  {% elif kind == "ask_question" %}
+    <div x-data="{answer: '{{ config.answer|default:'choice' }}'}" class="space-y-6">
+      <label class="block text-sm font-medium text-slate-700">Question
+        <textarea name="text" rows="4" class="{{ field }}">{{ config.text }}</textarea>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">The answer is
+        <select name="answer" x-model="answer" class="{{ field }}">
+          {% for key, text in answer_kinds %}<option value="{{ key }}" {% if config.answer == key %}selected{% endif %}>{{ text }}</option>{% endfor %}
+        </select>
+      </label>
+      <label x-show="answer === 'choice'" class="block text-sm font-medium text-slate-700">Options, one per line
+        <textarea name="options" rows="5" class="{{ field }}">{{ options_text }}</textarea>
+        <span class="mt-1 block text-xs font-normal text-slate-500">
+          Up to 3 short options (20 characters) show as tap buttons; up to 10 (24 characters) as a pick-list; more than that as a numbered list.
+          People can also type the number or the words.{% if presentation %} Now: <strong>{% if presentation == "buttons" %}tap buttons{% elif presentation == "list" %}a pick-list{% else %}a numbered list{% endif %}</strong>.{% endif %}
+        </span>
+      </label>
+      <div x-show="answer === 'number'" class="grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm font-medium text-slate-700">Smallest allowed <input name="min" value="{{ config.min|default_if_none:'' }}" inputmode="numeric" class="{{ field }}"></label>
+        <label class="block text-sm font-medium text-slate-700">Largest allowed <input name="max" value="{{ config.max|default_if_none:'' }}" inputmode="numeric" class="{{ field }}"></label>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm font-medium text-slate-700">Remember the answer as
+          <input name="save_name" value="{{ config.save_to.name|default:'' }}" maxlength="60" placeholder="e.g. Main_Menu" class="{{ field }}">
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Keep it
+          <select name="save_kind" class="{{ field }}">
+            <option value="variable" {% if config.save_to.kind != "contact" %}selected{% endif %}>For this chat only</option>
+            <option value="contact" {% if config.save_to.kind == "contact" %}selected{% endif %}>On the contact, for good</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="block text-sm font-medium text-slate-700">Ask again how many times after a wrong answer
+          <input name="retries" value="{{ config.retries|default_if_none:2 }}" inputmode="numeric" class="{{ field }}">
+        </label>
+        <label class="block text-sm font-medium text-slate-700">Stop waiting after (hours)
+          <input name="timeout_hours" value="{{ timeout_hours }}" inputmode="numeric" class="{{ field }}">
+        </label>
+      </div>
+      <label class="block text-sm font-medium text-slate-700">What to say after a wrong answer <span class="font-normal text-slate-400">(optional)</span>
+        <input name="invalid_text" value="{{ config.invalid_text|default:'' }}" placeholder="Sorry, I did not understand that. Please choose one of the options." class="{{ field }}">
+        <span class="mt-1 block text-xs font-normal text-slate-500">Used only when "Not a valid answer" below leads nowhere: the question is asked again, then the chat goes to an agent.</span>
+      </label>
+    </div>
+
+  {% elif kind == "branch" %}
+    <div>
+      <p class="text-sm font-medium text-slate-700">Rules, checked from the top. The first that matches is taken; if none does, "Anything else".</p>
+      <input type="hidden" name="rule_count" value="{{ rules|length }}">
+      <div class="mt-3 space-y-4">
+        {% for rule in rules %}
+          {% with r=forloop.counter0 %}
+          <div class="rounded-xl border border-slate-200 p-4">
+            <input type="hidden" name="rule-{{ r }}-id" value="{{ rule.id }}">
+            <input type="hidden" name="rule-{{ r }}-condition_count" value="{{ rule.conditions|length }}">
+            <div class="flex flex-wrap items-center gap-3">
+              <input name="rule-{{ r }}-name" value="{{ rule.name }}" placeholder="{% if rule.id %}Rule name{% else %}New rule: name it{% endif %}" class="w-48 rounded-lg border-slate-300 text-sm">
+              <select name="rule-{{ r }}-match" class="rounded-lg border-slate-300 text-sm">
+                <option value="all" {% if rule.match != "any" %}selected{% endif %}>when all of these are true</option>
+                <option value="any" {% if rule.match == "any" %}selected{% endif %}>when any of these is true</option>
+              </select>
+              {% if rule.id %}<label class="ml-auto text-xs text-slate-500"><input type="checkbox" name="rule-{{ r }}-delete" class="rounded border-slate-300"> remove rule</label>{% endif %}
+            </div>
+            {% for c in rule.conditions %}
+              <div class="mt-2 grid gap-2 sm:grid-cols-4">
+                <select name="rule-{{ r }}-c{{ forloop.counter0 }}-source" class="rounded-lg border-slate-300 text-sm">
+                  <option value="variable" {% if c.source != "contact" %}selected{% endif %}>Answer remembered as</option>
+                  <option value="contact" {% if c.source == "contact" %}selected{% endif %}>Contact detail</option>
+                </select>
+                <input name="rule-{{ r }}-c{{ forloop.counter0 }}-field" value="{{ c.field|default:'' }}" placeholder="e.g. Main_Menu" class="rounded-lg border-slate-300 text-sm">
+                <select name="rule-{{ r }}-c{{ forloop.counter0 }}-operator" class="rounded-lg border-slate-300 text-sm">
+                  {% for key, text in operators %}<option value="{{ key }}" {% if c.operator == key %}selected{% endif %}>{{ text }}</option>{% endfor %}
+                </select>
+                <input name="rule-{{ r }}-c{{ forloop.counter0 }}-value" value="{{ c.value|default:'' }}" placeholder="value" class="rounded-lg border-slate-300 text-sm">
+              </div>
+            {% endfor %}
+            <p class="mt-2 text-xs text-slate-400">Leave a row's middle box empty to skip it. Save to get another empty row.</p>
+          </div>
+          {% endwith %}
+        {% endfor %}
+      </div>
+      <p class="mt-2 text-xs text-slate-500">Comparisons ignore capitals and extra spaces, so "claims" matches "Claims ".</p>
+    </div>
+
+  {% elif kind == "update_contact" %}
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm font-medium text-slate-700">Contact detail <input name="field" value="{{ config.field|default:'' }}" placeholder="e.g. wa_code, or name" class="{{ field }}"></label>
+      <label class="block text-sm font-medium text-slate-700">Set it to <input name="value" value="{{ config.value|default:'' }}" class="{{ field }}"></label>
+    </div>
+    <p class="text-xs text-slate-500">{% templatetag openvariable %}now{% templatetag closevariable %} becomes the date and time; {% templatetag openvariable %}Main_Menu{% templatetag closevariable %} becomes an answer remembered under that name.</p>
+
+  {% elif kind == "audience" %}
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm font-medium text-slate-700">Action
+        <select name="action" class="{{ field }}"><option value="add" {% if config.action != "remove" %}selected{% endif %}>Add to</option><option value="remove" {% if config.action == "remove" %}selected{% endif %}>Remove from</option></select>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">Audience
+        <select name="audience_id" class="{{ field }}"><option value="">Choose…</option>{% for a in audiences %}<option value="{{ a.pk }}" {% if config.audience_id == a.pk %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select>
+      </label>
+    </div>
+
+  {% elif kind == "assign" %}
+    <div x-data="{to: '{{ config.to|default:'auto' }}'}" class="space-y-4">
+      <label class="block text-sm font-medium text-slate-700">Give the chat to
+        <select name="to" x-model="to" class="{{ field }}">
+          <option value="auto">The next available agent</option>
+          <option value="agent">A particular person</option>
+        </select>
+      </label>
+      <label x-show="to === 'agent'" class="block text-sm font-medium text-slate-700">Person
+        <select name="user_id" class="{{ field }}"><option value="">Choose…</option>{% for m in members %}<option value="{{ m.user_id }}" {% if config.user_id == m.user_id %}selected{% endif %}>{{ m.user }}</option>{% endfor %}</select>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">Note for the agent <span class="font-normal text-slate-400">(optional)</span>
+        <input name="note" value="{{ config.note|default:'' }}" maxlength="200" placeholder="e.g. Wants to follow up on a claim" class="{{ field }}">
+      </label>
+      <p class="text-xs text-slate-500">The workflow ends here; the agent takes it from this point.</p>
+    </div>
+
+  {% elif kind == "close" %}
+    <label class="block text-sm font-medium text-slate-700">Note <span class="font-normal text-slate-400">(optional)</span>
+      <input name="note" value="{{ config.note|default:'' }}" maxlength="200" class="{{ field }}">
+    </label>
+    <p class="text-xs text-slate-500">Marks the chat resolved. If the customer writes again, a new chat starts.</p>
+
+  {% elif kind == "jump" %}
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm font-medium text-slate-700">Go back to
+        <select name="target" class="{{ field }}"><option value="">Choose…</option>{% for sid, name in other_steps %}<option value="{{ sid }}" {% if config.target == sid %}selected{% endif %}>{{ name }}</option>{% endfor %}</select>
+      </label>
+      <label class="block text-sm font-medium text-slate-700">At most this many times <input name="max_times" value="{{ config.max_times|default:3 }}" inputmode="numeric" class="{{ field }}"></label>
+    </div>
+    <p class="text-xs text-slate-500">After that, "Jumped too many times" below is followed; if it leads nowhere, the chat goes to an agent.</p>
+
+  {% elif kind == "webhook" %}
+    <label class="block text-sm font-medium text-slate-700">Webhook to call
+      <select name="connection_id" class="{{ field }}"><option value="">Choose…</option>{% for c in connections %}<option value="{{ c.pk }}" {% if config.connection_id == c.pk %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+      <span class="mt-1 block text-xs font-normal text-slate-500"><a href="{% url 'workflows:connections' %}" class="text-[#0065A9] hover:underline">Set up webhooks</a>. It receives the contact's number, name, saved details and every answer so far.</span>
+    </label>
+    <label class="block text-sm font-medium text-slate-700">Remember what it sends back as <span class="font-normal text-slate-400">(optional)</span>
+      <input name="save_as" value="{{ config.save_as|default:'' }}" maxlength="60" placeholder="e.g. docs" class="{{ field }}">
+    </label>
+
+  {% elif kind == "start_workflow" %}
+    <label class="block text-sm font-medium text-slate-700">Workflow to start
+      <select name="workflow_id" class="{{ field }}"><option value="">Choose…</option>{% for w in workflows %}<option value="{{ w.pk }}" {% if config.workflow_id == w.pk %}selected{% endif %}>{{ w.name }}</option>{% endfor %}</select>
+    </label>
+
+  {% elif kind == "office_hours" %}
+    <p class="text-sm text-slate-600">Checks this workspace's <a href="{% url 'workspaces:hours' %}" class="text-[#0065A9] hover:underline">working hours and holidays</a>.</p>
+  {% endif %}
+
+  {% if exits %}
+    <div class="border-t border-slate-100 pt-5">
+      <p class="text-sm font-semibold text-slate-900">Where it leads</p>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+        {% for exit in exits %}
+          <label class="block text-sm font-medium text-slate-700">{{ exit.label }}
+            <select name="next_{{ exit.key }}" class="{{ field }}">
+              <option value="">The workflow ends</option>
+              {% for sid, name in other_steps %}<option value="{{ sid }}" {% if exit.target == sid %}selected{% endif %}>{{ name }}{% if sid == step_id %} (this step again){% endif %}</option>{% endfor %}
+            </select>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not is_start %}
+    <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" name="make_start" class="rounded border-slate-300"> Make this the first step</label>
+  {% endif %}
+
+  <div class="flex items-center justify-between border-t border-slate-100 pt-5">
+    <a href="{% url 'workflows:detail' workflow.pk %}#step-{{ step_id }}" class="text-sm font-medium text-slate-500 hover:text-slate-700">Back</a>
+    <button class="rounded-xl bg-[#0065A9] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">Save to draft</button>
+  </div>
+</form>
+
+<form method="post" action="{% url 'workflows:step_delete' workflow.pk step_id %}" class="mt-4 max-w-3xl text-right"
+      onsubmit="return confirm('Remove this step? Whatever led to it will lead to the step after it.');">
+  {% csrf_token %}
+  <button class="text-sm text-slate-400 hover:text-rose-600">Remove this step</button>
+</form>
+
+{% endwith %}
+{% endblock %}

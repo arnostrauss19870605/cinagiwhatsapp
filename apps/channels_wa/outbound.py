@@ -23,6 +23,13 @@ def _finish(conversation, message, result):
         message.wa_error = {"reason": result.error, **(result.raw or {})}
     message.save()
 
+    # An agent writing to the customer takes over from any workflow, whether or
+    # not WhatsApp accepted that particular message.
+    if message.actor == Message.Actor.AGENT:
+        from apps.workflows.engine import stop
+
+        stop(conversation, "an agent replied")
+
     if result.ok:
         conversation.touch_outbound()
         # A person replying takes the chat out of the queue. A campaign or the
@@ -179,5 +186,91 @@ def send_media(conversation, django_file, *, caption="", author=None):
         from apps.channels_wa.messaging.base import SendResult
 
         logger.warning("media send failed conversation=%s", conversation.pk, exc_info=True)
+        result = SendResult(ok=False, error=getattr(exc, "friendly", "That file could not be sent."))
+    return _finish(conversation, message, result)
+
+
+def send_buttons(conversation, body, buttons, *, actor=Message.Actor.BOT, payload=None):
+    """Up to three tap buttons. `buttons` = [{"id": ..., "title": ...}]."""
+    message = Message(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.OUT,
+        actor=actor,
+        kind=Message.Kind.INTERACTIVE,
+        body=body,
+        payload={"buttons": buttons, **(payload or {})},
+    )
+    result = conversation.channel.client().send_buttons(conversation.contact.wa_id, body, buttons)
+    return _finish(conversation, message, result)
+
+
+def send_list(conversation, body, button_text, rows, *, actor=Message.Actor.BOT, payload=None):
+    """A pick-list of up to ten rows. `rows` = [{"id": ..., "title": ...}]."""
+    message = Message(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.OUT,
+        actor=actor,
+        kind=Message.Kind.INTERACTIVE,
+        body=body,
+        payload={"list": rows, **(payload or {})},
+    )
+    sections = [{"title": button_text[:24], "rows": [{"id": r["id"], "title": r["title"][:24]} for r in rows]}]
+    result = conversation.channel.client().send_list(
+        conversation.contact.wa_id, body, button_text, sections
+    )
+    return _finish(conversation, message, result)
+
+
+def send_stored_file(conversation, stored, *, caption="", actor=Message.Actor.BOT, payload=None):
+    """Send a file we keep (a workflow's brochure), reusing WhatsApp's copy while it is fresh.
+
+    `stored` has file, filename, mime, media_id, media_uploaded_at and
+    media_channel_id. WhatsApp deletes uploaded media after 30 days, so the
+    copy is re-uploaded after 25, or when the chat is on a different number.
+    """
+    import datetime as dt
+
+    from apps.channels_wa.comms_guard import outbound_blocked
+    from apps.channels_wa.messaging.base import SendResult
+
+    channel = conversation.channel
+    kind = stored.kind
+    message = Message(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.OUT,
+        actor=actor,
+        kind=kind,
+        body=caption,
+        media_mime=stored.mime,
+        media_filename=stored.filename,
+        payload=payload or {},
+    )
+    blocked = outbound_blocked(conversation.contact.wa_id)
+    if blocked:
+        return _finish(conversation, message, SendResult(ok=False, blocked_reason=blocked))
+
+    fresh = (
+        stored.media_id
+        and stored.media_channel_id == channel.pk
+        and stored.media_uploaded_at
+        and timezone.now() - stored.media_uploaded_at < dt.timedelta(days=25)
+    )
+    try:
+        if not fresh:
+            with stored.file.open("rb") as handle:
+                stored.media_id = channel.client().upload_media(handle, stored.mime)
+            stored.media_uploaded_at = timezone.now()
+            stored.media_channel_id = channel.pk
+            stored.save(update_fields=["media_id", "media_uploaded_at", "media_channel_id"])
+        if not stored.media_id:
+            raise ValueError("WhatsApp returned no media id")
+        result = channel.client().send_media(
+            conversation.contact.wa_id, stored.media_id, kind=kind, caption=caption, filename=stored.filename
+        )
+    except Exception as exc:
+        logger.warning("stored file send failed conversation=%s", conversation.pk, exc_info=True)
         result = SendResult(ok=False, error=getattr(exc, "friendly", "That file could not be sent."))
     return _finish(conversation, message, result)

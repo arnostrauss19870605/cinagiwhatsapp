@@ -38,6 +38,14 @@ class Command(BaseCommand):
             },
         )
         PeriodicTask.objects.update_or_create(
+            name="Move on workflows whose question went unanswered",
+            defaults={
+                "interval": every_minute,
+                "task": "apps.workflows.tasks.expire_waiting_runs",
+                "queue": "default",
+            },
+        )
+        PeriodicTask.objects.update_or_create(
             name="Check WhatsApp for template approvals",
             defaults={
                 "interval": every_ten_minutes,

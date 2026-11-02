@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Workflow files{% endblock %}
+{% block content %}
+
+<nav class="text-sm text-slate-500">
+  <a href="{% url 'workflows:list' %}" class="hover:text-[#0065A9]">Workflows</a>
+  <span class="mx-1.5">/</span>
+  <span class="text-slate-800">Files</span>
+</nav>
+
+<div class="mt-4">
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Files</h1>
+  <p class="mt-1 max-w-2xl text-sm text-slate-500">Brochures, how-to guides and pictures your workflows send. Choose one in a "Send a message" step.</p>
+</div>
+
+<div class="mt-8 grid gap-8 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <table class="w-full text-sm">
+        <tbody class="divide-y divide-slate-100">
+          {% for f in files %}
+            <tr>
+              <td class="px-6 py-3.5"><a href="{% url 'workflows:file_download' f.pk %}" class="font-medium text-[#0065A9] hover:underline">{{ f.filename }}</a>
+                <p class="text-xs text-slate-500">{{ f.kind|capfirst }} · added {{ f.created_at|date:"j M Y" }}</p></td>
+              <td class="px-6 py-3.5 text-right">
+                <form method="post" action="{% url 'workflows:file_delete' f.pk %}" onsubmit="return confirm('Delete this file?');">{% csrf_token %}
+                  <button class="text-xs text-slate-400 hover:text-rose-600">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td class="px-6 py-14 text-center text-slate-500">No files yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <form method="post" enctype="multipart/form-data" class="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    {% csrf_token %}
+    <h2 class="text-base font-semibold text-slate-900">Upload a file</h2>
+    <p class="mt-1.5 text-xs text-slate-500">PDF, JPG, PNG or MP4, up to 16 MB.</p>
+    <input type="file" name="file" required accept=".pdf,.jpg,.jpeg,.png,.mp4"
+           class="mt-4 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0065A9]/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#0065A9]">
+    <button class="mt-4 w-full rounded-xl bg-[#0065A9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">Upload</button>
+  </form>
+</div>
+
+{% endblock %}

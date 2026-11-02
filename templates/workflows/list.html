@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Workflows{% endblock %}
+{% block content %}
+
+<div class="hero flex flex-wrap items-center justify-between gap-4 rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
+  <div>
+    <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Automation</p>
+    <h1 class="mt-1 text-3xl font-semibold tracking-tight">Workflows</h1>
+    <p class="mt-2 max-w-2xl text-sm text-sky-100">
+      A workflow greets each new chat, asks what the person needs, sends the right information and hands
+      the chat to an agent when it should. Typing STOP or asking for a person always wins over a workflow.
+    </p>
+  </div>
+  <div class="flex gap-2">
+    <a href="{% url 'workflows:connections' %}" class="rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">Webhooks</a>
+    <a href="{% url 'workflows:files' %}" class="rounded-xl bg-white/15 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur transition hover:bg-white/25">Files</a>
+  </div>
+</div>
+
+<div class="mt-8 grid gap-8 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <tr><th class="px-6 py-3.5">Workflow</th><th class="px-6 py-3.5">Status</th><th class="px-6 py-3.5 text-right">In it now</th><th class="px-6 py-3.5 text-right">Chats so far</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for workflow in workflows %}
+            <tr class="transition hover:bg-slate-50/70">
+              <td class="px-6 py-4">
+                <a href="{% url 'workflows:detail' workflow.pk %}" class="font-medium text-[#0065A9] hover:underline">{{ workflow.name }}</a>
+                <p class="mt-0.5 text-xs text-slate-500">{{ workflow.get_trigger_display }}</p>
+              </td>
+              <td class="px-6 py-4">
+                {% if workflow.is_active %}
+                  <span class="rounded-full bg-[#76BD4C]/15 px-2.5 py-1 text-xs font-medium text-[#3d7a1e]">On</span>
+                {% elif workflow.published %}
+                  <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">Off</span>
+                {% else %}
+                  <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-800">Draft, not published</span>
+                {% endif %}
+              </td>
+              <td class="num px-6 py-4 text-right">{{ workflow.live }}</td>
+              <td class="num px-6 py-4 text-right">{{ workflow.total }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="px-6 py-14 text-center text-slate-500">
+              <p class="text-base font-medium text-slate-700">No workflows yet</p>
+              <p class="mx-auto mt-1 max-w-sm text-sm">Import one from respond.io on the right, or start an empty one.</p>
+            </td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <form method="post" action="{% url 'workflows:import' %}" enctype="multipart/form-data" class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      {% csrf_token %}
+      <h2 class="text-base font-semibold text-slate-900">Import from respond.io</h2>
+      <p class="mt-1.5 text-xs leading-relaxed text-slate-500">
+        In respond.io, open the workflow and export it. Upload the .json file here. It arrives as a draft,
+        with notes on anything that works differently here, and its files copied across.
+      </p>
+      <input type="file" name="file" accept=".json,application/json" required
+             class="mt-4 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#0065A9]/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#0065A9] hover:file:bg-[#0065A9]/20">
+      <button class="mt-4 w-full rounded-xl bg-[#0065A9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">Import</button>
+    </form>
+
+    <form method="post" class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      {% csrf_token %}
+      <h2 class="text-base font-semibold text-slate-900">Start an empty workflow</h2>
+      <input name="name" required maxlength="120" placeholder="e.g. After hours"
+             class="mt-4 w-full rounded-xl border-slate-300 text-sm shadow-sm focus:border-[#0065A9] focus:ring-[#0065A9]">
+      <button class="mt-4 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Create</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

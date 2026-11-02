@@ -105,12 +105,20 @@ def _store_message(channel, payload, profiles):
         .first()
     )
     is_new = conversation is None
+    # A new chat goes to the switched-on workflow, unless its very first
+    # message is STOP or a request for a person: those always win.
+    starting = None
     if is_new:
+        first_words = extract_body(payload)
+        if not _wants_to_stop(first_words) and not _wants_a_human(first_words):
+            from apps.workflows.engine import starting_workflow
+
+            starting = starting_workflow(workspace)
         conversation = Conversation(
             workspace=workspace,
             channel=channel,
             contact=contact,
-            status=Conversation.Status.QUEUED,
+            status=Conversation.Status.BOT if starting else Conversation.Status.QUEUED,
         )
 
     conversation.touch_inbound(received_at)
@@ -141,7 +149,7 @@ def _store_message(channel, payload, profiles):
     channel.last_inbound_at = received_at
     channel.save(update_fields=["last_inbound_at"])
 
-    if is_new:
+    if is_new and starting is None:
         from apps.agents.allocation import auto_assign
 
         auto_assign(conversation)
@@ -153,18 +161,27 @@ def _store_message(channel, payload, profiles):
         _opt_out(conversation, message)
     elif _wants_to_resume(message.body) and conversation.contact.is_opted_out:
         _opt_in(conversation, message)
+    # A tap on one of a workflow's own buttons is an answer, even when its
+    # words ("Chat to a Consultant") would otherwise read as asking for a person.
+    elif selection_id(payload).startswith("wf:") and _workflow_reply(conversation, message):
+        pass
     # Always honoured, whatever the automation is doing and whatever step the
     # customer is on. This is the promise the footer on every template makes.
     elif _wants_a_human(message.body):
         _escalate_to_human(conversation, message)
+    elif starting is not None:
+        _start_workflow(conversation, starting)
     else:
-        # A tap on a question's button is an answer, tied to the message it
-        # replied to. Then the event journey gets first refusal on the rest:
-        # it claims tokens and RSVP answers and leaves anything it does not
-        # understand for a person, rather than guessing.
+        # A running workflow gets first refusal. Then a tap on a question's
+        # button is an answer, tied to the message it replied to. Then the
+        # event journey gets the rest: it claims tokens and RSVP answers and
+        # leaves anything it does not understand for a person, rather than
+        # guessing.
         from apps.questions.answers import record_answer
 
-        claimed = record_answer(conversation, message) is not None
+        claimed = _workflow_reply(conversation, message)
+        if not claimed:
+            claimed = record_answer(conversation, message) is not None
         if not claimed:
             try:
                 from apps.events.journey import handle as handle_event
@@ -184,6 +201,33 @@ def _store_message(channel, payload, profiles):
 
     events.conversation_changed(conversation, "message")
     return message
+
+
+def _start_workflow(conversation, workflow):
+    """Start the workflow; if it cannot even start, the chat goes to a person instead."""
+    from apps.agents.allocation import auto_assign
+    from apps.workflows.engine import start
+
+    try:
+        start(workflow, conversation)
+    except Exception:
+        logger.exception("workflow start failed conversation=%s", conversation.pk)
+        conversation.refresh_from_db()
+        if conversation.status == Conversation.Status.BOT and not conversation.assigned_to_id:
+            conversation.status = Conversation.Status.QUEUED
+            conversation.automation_state = {}
+            conversation.save(update_fields=["status", "automation_state"])
+            auto_assign(conversation)
+
+
+def _workflow_reply(conversation, message):
+    from apps.workflows.engine import handle_reply
+
+    try:
+        return handle_reply(conversation, message)
+    except Exception:
+        logger.exception("workflow reply failed conversation=%s", conversation.pk)
+        return False
 
 
 def _fetch_media(channel, message, payload, kind):
@@ -272,6 +316,9 @@ def _opt_out(conversation, message):
         contact.opted_out_at = timezone.now()
         contact.save(update_fields=["opted_out_at"])
 
+    from apps.workflows.engine import stop
+
+    stop(conversation, "the customer replied STOP")
     conversation.automation_state = {}
     conversation.handoff_reason = "opted out"
     conversation.save(update_fields=["automation_state", "handoff_reason"])
@@ -355,6 +402,9 @@ def _first_name(conversation):
 def _escalate_to_human(conversation, message):
     """Take a conversation away from automation and put it in the queue."""
     from apps.agents.allocation import auto_assign
+    from apps.workflows.engine import stop
+
+    stop(conversation, "the customer asked for a person")
 
     conversation.status = Conversation.Status.QUEUED if not conversation.assigned_to_id else conversation.status
     conversation.priority = max(conversation.priority, Conversation.Priority.HIGH)

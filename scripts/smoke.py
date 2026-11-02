@@ -63,6 +63,7 @@ pages = [
  ("analytics","/analytics/"),("analytics 7 days","/analytics/?days=7"),
  ("new template","/library/templates/new/"),
  ("audiences","/contacts/audiences/"),("audience import","/contacts/audiences/import/"),
+ ("workflows","/workflows/"),("workflow webhooks","/workflows/webhooks/"),("workflow files","/workflows/files/"),
  ("questions","/questions/"),("new question","/questions/new/"),("prize draw","/questions/prize-draw/"),
  ("users","/accounts/users/"),("new user","/accounts/users/new/"),(f"edit user","/accounts/users/1/"),
  ("healthz","/healthz"),

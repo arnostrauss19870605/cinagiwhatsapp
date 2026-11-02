@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Webhooks{% endblock %}
+{% block content %}
+
+<nav class="text-sm text-slate-500">
+  <a href="{% url 'workflows:list' %}" class="hover:text-[#0065A9]">Workflows</a>
+  <span class="mx-1.5">/</span>
+  <span class="text-slate-800">Webhooks</span>
+</nav>
+
+<div class="mt-4">
+  <h1 class="text-2xl font-semibold tracking-tight text-slate-900">Webhooks</h1>
+  <p class="mt-1 max-w-2xl text-sm text-slate-500">
+    A webhook sends a customer's details to another system, for example to email them their policy
+    documents. Add one here, then use a "Call a webhook" step in a workflow.
+  </p>
+</div>
+
+<div class="mt-8 grid gap-8 lg:grid-cols-3">
+  <div class="space-y-4 lg:col-span-2">
+    {% for c in connections %}
+      <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200" x-data="{show:false}">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-medium text-slate-900">{{ c.name }}
+              {% if not c.is_active %}<span class="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">Off</span>{% endif %}
+            </p>
+            <p class="mt-0.5 break-all text-xs text-slate-500">{{ c.url }}</p>
+          </div>
+          <div class="flex gap-2 text-xs">
+            <form method="post" action="{% url 'workflows:connection_update' c.pk %}">{% csrf_token %}<input type="hidden" name="action" value="toggle"><button class="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50">{% if c.is_active %}Switch off{% else %}Switch on{% endif %}</button></form>
+            <form method="post" action="{% url 'workflows:connection_update' c.pk %}" onsubmit="return confirm('Make a new token? The old one stops working immediately.');">{% csrf_token %}<input type="hidden" name="action" value="new_token"><button class="rounded-lg border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50">New token</button></form>
+            <form method="post" action="{% url 'workflows:connection_update' c.pk %}" onsubmit="return confirm('Delete this webhook?');">{% csrf_token %}<input type="hidden" name="action" value="delete"><button class="rounded-lg px-3 py-1.5 text-slate-400 hover:text-rose-600">Delete</button></form>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center gap-2 text-xs">
+          <span class="font-medium text-slate-500">Token:</span>
+          <code x-show="!show" class="rounded bg-slate-100 px-2 py-1 text-slate-500">••••••••••••</code>
+          <code x-show="show" x-cloak class="break-all rounded bg-slate-100 px-2 py-1 text-slate-800">{{ c.token }}</code>
+          <button type="button" @click="show=!show" class="text-[#0065A9] hover:underline" x-text="show ? 'Hide' : 'Show'"></button>
+        </div>
+      </div>
+    {% empty %}
+      <div class="rounded-2xl bg-white p-10 text-center text-slate-500 shadow-sm ring-1 ring-slate-200">
+        <p class="text-base font-medium text-slate-700">No webhooks yet</p>
+        <p class="mt-1 text-sm">Add the web address of the system that should receive the details.</p>
+      </div>
+    {% endfor %}
+
+    <details class="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm">
+      <summary class="cursor-pointer font-semibold text-slate-900">For whoever builds the receiving end</summary>
+      <div class="mt-3 space-y-2 text-slate-700">
+        <p>Each call is an HTTPS <strong>POST</strong> with a JSON body. Answer with any 2xx status within 10 seconds; anything else counts as failed (a 5xx or no answer is tried once more).</p>
+        <p>Check both headers before acting:</p>
+        <ul class="list-disc space-y-1 pl-5">
+          <li><code class="rounded bg-slate-100 px-1">Authorization: Bearer &lt;token&gt;</code></li>
+          <li><code class="rounded bg-slate-100 px-1">X-Cinagi-Signature: sha256=&lt;hex&gt;</code> &mdash; HMAC-SHA256 of the exact request body, keyed with the token.</li>
+        </ul>
+        <p>The body looks like this:</p>
+        <pre class="overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs text-slate-100">{
+  "event": "workflow.webhook",
+  "sent_at": "2026-11-02T10:15:00+02:00",
+  "workspace": "Cinagi Broker Support",
+  "workflow": "Main workflow",
+  "step": "Request policy documents",
+  "conversation_id": "…",
+  "contact": {
+    "number": "+27721234567", "wa_id": "27721234567", "name": "Thabo Mokoena",
+    "details": {"id_number": "8001015009087", "cell_number": "0721234567"}
+  },
+  "answers": {"Main_Menu": "Policy &amp; Benefits", "last_answer": "0721234567"}
+}</pre>
+        <p>A JSON object sent back is remembered for later steps if the step names it.</p>
+      </div>
+    </details>
+  </div>
+
+  <form method="post" class="h-fit rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+    {% csrf_token %}
+    <h2 class="text-base font-semibold text-slate-900">Add a webhook</h2>
+    <label class="mt-4 block text-sm font-medium text-slate-700">Name
+      <input name="name" required maxlength="120" placeholder="e.g. Policy documents" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
+    </label>
+    <label class="mt-3 block text-sm font-medium text-slate-700">Web address
+      <input name="url" required type="url" placeholder="https://…" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
+    </label>
+    <label class="mt-3 block text-sm font-medium text-slate-700">Token <span class="font-normal text-slate-400">(leave empty to make one)</span>
+      <input name="token" maxlength="200" autocomplete="off" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
+    </label>
+    <button class="mt-5 w-full rounded-xl bg-[#0065A9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">Add webhook</button>
+  </form>
+</div>
+
+{% endblock %}

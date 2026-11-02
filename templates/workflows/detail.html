@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}{{ workflow.name }}{% endblock %}
+{% block content %}
+
+<nav class="text-sm text-slate-500">
+  <a href="{% url 'workflows:list' %}" class="hover:text-[#0065A9]">Workflows</a>
+  <span class="mx-1.5">/</span>
+  <span class="text-slate-800">{{ workflow.name }}</span>
+</nav>
+
+<div class="mt-4 flex flex-wrap items-start justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-semibold tracking-tight text-slate-900">{{ workflow.name }}</h1>
+    {% if workflow.description %}<p class="mt-1 text-sm text-slate-500">{{ workflow.description }}</p>{% endif %}
+    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      {% if workflow.is_active %}
+        <span class="rounded-full bg-[#76BD4C]/15 px-2.5 py-1 font-medium text-[#3d7a1e]">On: greets every new chat</span>
+      {% else %}
+        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">Off</span>
+      {% endif %}
+      <span class="text-slate-500">{{ workflow.get_trigger_display }}</span>
+      {% if workflow.published %}<span class="text-slate-500">· Published version {{ workflow.published.number }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    {% if version and version.editable %}
+      <form method="post" action="{% url 'workflows:publish' workflow.pk %}">{% csrf_token %}
+        <button class="rounded-xl bg-[#0065A9] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490] disabled:opacity-50" {% if problems %}disabled title="Fix the problems listed first"{% endif %}>
+          Publish version {{ version.number }}
+        </button>
+      </form>
+    {% endif %}
+    {% if workflow.trigger == "chat_opened" %}
+      <form method="post" action="{% url 'workflows:toggle' workflow.pk %}">{% csrf_token %}
+        {% if workflow.is_active %}
+          <input type="hidden" name="on" value="0">
+          <button class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50">Switch off</button>
+        {% else %}
+          <input type="hidden" name="on" value="1">
+          <button class="rounded-xl border border-[#76BD4C] px-4 py-2 text-sm font-semibold text-[#3d7a1e] transition hover:bg-[#76BD4C]/10 disabled:opacity-50" {% if not workflow.published %}disabled title="Publish it first"{% endif %}>Switch on</button>
+        {% endif %}
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if version and version.editable %}
+  <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+    <p class="font-semibold">You are looking at draft version {{ version.number }}{% if workflow.published %}, which is not live yet{% endif %}.</p>
+    <p class="mt-1">{% if workflow.published %}Chats keep using version {{ workflow.published.number }} until you publish.{% else %}Publish it, then switch it on, for it to greet new chats.{% endif %}
+      {% if workflow.published %}
+        <form method="post" action="{% url 'workflows:discard' workflow.pk %}" class="inline">{% csrf_token %}
+          <button class="ml-1 underline hover:no-underline">Throw these changes away</button>
+        </form>
+      {% endif %}
+    </p>
+    {% if problems %}
+      <p class="mt-3 font-semibold">Fix these before publishing:</p>
+      <ul class="mt-1 list-disc space-y-0.5 pl-5">{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% if notes %}
+  <details class="mt-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm" open>
+    <summary class="cursor-pointer font-semibold text-slate-900">Notes from the respond.io import ({{ notes|length }})</summary>
+    <ul class="mt-3 list-disc space-y-1 pl-5 text-slate-700">{% for n in notes %}<li>{{ n }}</li>{% endfor %}</ul>
+  </details>
+{% endif %}
+
+<div class="mt-8 grid gap-8 lg:grid-cols-3">
+  <div class="space-y-3 lg:col-span-2">
+    <h2 class="text-sm font-semibold text-slate-700">Steps, in the order a customer meets them</h2>
+    {% for item in steps %}
+      <div id="step-{{ item.id }}" class="scroll-mt-24 rounded-2xl bg-white p-5 shadow-sm ring-1 {% if item.unreached %}ring-amber-300{% else %}ring-slate-200{% endif %} target:ring-2 target:ring-[#0065A9]">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[11px] font-semibold uppercase tracking-wider text-[#0065A9]">
+              {{ item.label }}{% if item.is_start %} · <span class="text-[#3d7a1e]">first step</span>{% endif %}{% if item.unreached %} · <span class="text-amber-700">nothing leads here</span>{% endif %}
+            </p>
+            <p class="mt-0.5 font-medium text-slate-900">{{ item.step.name }}</p>
+            {% if item.summary %}<p class="mt-1 break-words text-sm text-slate-600">{{ item.summary }}</p>{% endif %}
+          </div>
+          <a href="{% url 'workflows:step_edit' workflow.pk item.id %}" class="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Edit</a>
+        </div>
+        {% if item.exits %}
+          <ul class="mt-3 space-y-1 border-t border-slate-100 pt-3 text-xs">
+            {% for exit in item.exits %}
+              <li class="flex flex-wrap items-center gap-x-2 gap-y-1" x-data="{add:false}">
+                <span class="font-medium text-slate-500">{{ exit.label }}:</span>
+                {% if exit.target %}
+                  <a href="#step-{{ exit.target }}" class="text-[#0065A9] hover:underline">→ {{ exit.target_name }}</a>
+                {% else %}
+                  <span class="text-slate-400">the workflow ends</span>
+                {% endif %}
+                <button type="button" @click="add=!add" class="text-slate-400 hover:text-[#0065A9]">+ add a step here</button>
+                <form x-show="add" x-cloak method="post" action="{% url 'workflows:step_add' workflow.pk %}" class="flex items-center gap-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="after" value="{{ item.id }}"><input type="hidden" name="exit" value="{{ exit.key }}">
+                  <select name="kind" class="rounded-lg border-slate-300 py-1 text-xs">{% for key, label in step_types %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+                  <button class="rounded-lg bg-[#0065A9] px-2.5 py-1 font-semibold text-white">Add</button>
+                </form>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    {% empty %}
+      <div class="rounded-2xl bg-white p-10 text-center text-slate-500 shadow-sm ring-1 ring-slate-200">
+        <p class="text-base font-medium text-slate-700">No steps yet</p>
+        <form method="post" action="{% url 'workflows:step_add' workflow.pk %}" class="mt-4 inline-flex items-center gap-2">
+          {% csrf_token %}
+          <select name="kind" class="rounded-xl border-slate-300 text-sm">{% for key, label in step_types %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select>
+          <button class="rounded-xl bg-[#0065A9] px-4 py-2 text-sm font-semibold text-white">Add the first step</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="space-y-6">
+    <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-base font-semibold text-slate-900">Recent chats</h2>
+      <ul class="mt-3 divide-y divide-slate-100 text-sm">
+        {% for run in recent_runs %}
+          <li class="py-2.5">
+            <a href="{% url 'workflows:run_detail' run.pk %}" class="font-medium text-slate-800 hover:text-[#0065A9]">{{ run.contact.name }}</a>
+            <p class="text-xs text-slate-500">{{ run.get_status_display }}{% if run.end_reason %} · {{ run.end_reason }}{% endif %} · {{ run.created_at|timesince }} ago</p>
+          </li>
+        {% empty %}
+          <li class="py-2 text-slate-500">Nobody has been through it yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <form method="post" action="{% url 'workflows:settings' workflow.pk %}" class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      {% csrf_token %}
+      <h2 class="text-base font-semibold text-slate-900">Settings</h2>
+      <label class="mt-4 block text-sm font-medium text-slate-700">Name
+        <input name="name" value="{{ workflow.name }}" required maxlength="120" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
+      </label>
+      <label class="mt-3 block text-sm font-medium text-slate-700">Description
+        <input name="description" value="{{ workflow.description }}" maxlength="255" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
+      </label>
+      <label class="mt-3 block text-sm font-medium text-slate-700">Runs when
+        <select name="trigger" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
+          <option value="chat_opened" {% if workflow.trigger == "chat_opened" %}selected{% endif %}>A new chat starts</option>
+          <option value="manual" {% if workflow.trigger == "manual" %}selected{% endif %}>Only when another workflow starts it</option>
+        </select>
+      </label>
+      <button class="mt-4 w-full rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Save</button>
+    </form>
+
+    <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-base font-semibold text-slate-900">Versions</h2>
+      <ul class="mt-3 space-y-1.5 text-sm">
+        {% for v in versions %}
+          <li class="flex justify-between gap-2">
+            <span>Version {{ v.number }}{% if v.note %} <span class="text-xs text-slate-500">· {{ v.note }}</span>{% endif %}</span>
+            <span class="text-xs text-slate-500">{% if v.published_at %}{% if workflow.published_id == v.pk %}<strong class="text-[#3d7a1e]">live</strong>{% else %}published{% endif %} {{ v.published_at|date:"j M Y" }}{% else %}draft{% endif %}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <form method="post" action="{% url 'workflows:delete' workflow.pk %}" onsubmit="return confirm('Delete this workflow and its history?');">
+      {% csrf_token %}
+      <button class="text-sm text-slate-400 hover:text-rose-600">Delete this workflow</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
