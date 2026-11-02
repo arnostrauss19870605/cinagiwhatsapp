@@ -317,8 +317,7 @@ class GraphRuleTests(TestCase):
         self.assertIn("'Hello' leads to a step that no longer exists.", found)
 
 
-class RespondIoImportTests(TestCase):
-    """The real Cinagi export, converted and then run end to end."""
+class RespondIoImportBase(TestCase):
 
     def setUp(self):
         from pathlib import Path
@@ -343,6 +342,11 @@ class RespondIoImportTests(TestCase):
         folder = tempfile.mkdtemp()
         self.addCleanup(__import__("shutil").rmtree, folder, ignore_errors=True)
         return folder
+
+
+
+class RespondIoImportTests(RespondIoImportBase):
+    """The real Cinagi export, converted and then run end to end."""
 
     def test_the_export_becomes_a_draft_with_its_files_and_a_report(self):
         from apps.workflows.graph import problems
@@ -390,6 +394,87 @@ class RespondIoImportTests(TestCase):
             Message.objects.filter(direction="out", media_filename="Cinagi - How to Claim.pdf").count(), 1
         )
         self.assertEqual(bodies[-1], "Is there something else we can assist with?")
+
+
+class AfterHoursImportTests(RespondIoImportBase):
+    """The main workflow and its after-hours partner, imported in either order and joined up."""
+
+    def setUp(self):
+        from pathlib import Path
+
+        super().setUp()
+        path = Path(__file__).parent / "fixtures" / "respondio_out_of_office.json"
+        self.after_hours = json.loads(path.read_text(encoding="utf-8"))
+
+    def _import_both(self, *, main_first):
+        from apps.workflows.respondio import import_export
+
+        order = [self.export, self.after_hours] if main_first else [self.after_hours, self.export]
+        with self.settings(MEDIA_ROOT=self._media()):
+            results = [import_export(self.workspace, data, fetch=lambda url: b"%PDF-1.4 test") for data in order]
+        main, after = (results[0], results[1]) if main_first else (results[1], results[0])
+        return main, after
+
+    def _hand_over_step(self, main):
+        steps = main.latest.graph["steps"]
+        return next(s for s in steps.values() if s["name"] == "Trigger Another Workflow #3")
+
+    def test_importing_the_after_hours_workflow_second_connects_the_main_one(self):
+        (main, _), (after, notes) = self._import_both(main_first=True)
+        self.assertEqual(after.trigger, Workflow.Trigger.MANUAL)
+        step = self._hand_over_step(main)
+        self.assertEqual(step["type"], "start_workflow")
+        self.assertEqual(step["config"]["workflow_id"], after.pk)
+        self.assertTrue(any("now does too" in n for n in notes))
+
+    def test_importing_it_first_works_too(self):
+        (main, _), (after, _) = self._import_both(main_first=False)
+        step = self._hand_over_step(main)
+        self.assertEqual((step["type"], step["config"]["workflow_id"]), ("start_workflow", after.pk))
+
+    def test_timeouts_and_stranded_steps_are_carried_over(self):
+        (_, _), (after, notes) = self._import_both(main_first=True)
+        steps = after.latest.graph["steps"]
+        menu = next(s for s in steps.values() if s["name"] == "Ask a Question #1")
+        self.assertEqual(menu["config"]["timeout_minutes"], 5)
+        self.assertEqual(steps[menu["next"]["timeout"]]["type"], "close")
+        self.assertTrue(any("never ran" in n for n in notes))
+
+    def test_a_chat_outside_office_hours_gets_the_after_hours_workflow(self):
+        from apps.workspaces.models import BusinessHours
+
+        (main, _), (after, _) = self._import_both(main_first=True)
+        for workflow in (after, main):
+            version = workflow.latest
+            version.published_at = timezone.now()
+            version.save()
+            workflow.published = version
+            workflow.save()
+        main.is_active = True
+        main.save()
+        BusinessHours.objects.create(workspace=self.workspace, weekday=timezone.localtime().weekday(),
+                                     is_closed=True, opens_at=dt.time(8), closes_at=dt.time(16, 30))
+        process_value(self.channel, {
+            "metadata": {"phone_number_id": "123"},
+            "contacts": [{"profile": {"name": "Thabo"}, "wa_id": NUMBER}],
+            "messages": [{"from": NUMBER, "id": "wamid.ah1", "type": "text",
+                          "timestamp": str(int(timezone.now().timestamp())), "text": {"body": "Hi"}}],
+        })
+        bodies = list(Message.objects.filter(direction="out").values_list("body", flat=True))
+        self.assertTrue(bodies[0].startswith("Hi you have reached Cinagi outside of office hours"))
+        run = WorkflowRun.objects.get(status=WorkflowRun.Status.WAITING)
+        self.assertEqual(run.workflow, after)
+
+        process_value(self.channel, {
+            "metadata": {"phone_number_id": "123"},
+            "contacts": [{"profile": {"name": "Thabo"}, "wa_id": NUMBER}],
+            "messages": [{"from": NUMBER, "id": "wamid.ah2", "type": "text",
+                          "timestamp": str(int(timezone.now().timestamp())), "text": {"body": "Cinagi Policyholder"}}],
+        })
+        run = WorkflowRun.objects.get(status=WorkflowRun.Status.WAITING)
+        engine.expire_waiting(now=run.waiting_until + dt.timedelta(seconds=1))
+        conversation = Conversation.objects.get(contact__wa_id=NUMBER)
+        self.assertEqual(conversation.status, Conversation.Status.RESOLVED, "five quiet minutes close the chat")
 
 
 class WorkflowPageBase(TestCase):

@@ -192,7 +192,8 @@ class Converter:
         step.update(type="ask_question", config=config)
         nxt = {}
         for connector in self._connectors(rid):
-            key = "answered" if (connector.get("data") or {}).get("connectorType") == "success" else "invalid"
+            kind = (connector.get("data") or {}).get("connectorType")
+            key = {"success": "answered", "timeout": "timeout"}.get(kind, "invalid")
             nxt[key] = self._after(connector["id"])
         step["next"] = nxt
 
@@ -292,6 +293,12 @@ class Converter:
         step.update(type="jump", config={"target": None, "max_times": int(data.get("maxJumps") or 3)},
                     next={})
         step["config"]["target"] = self.convert(str(data.get("stepId")))
+        stranded = self._step_children(rid)
+        if stranded:
+            self.notes.append(
+                f"'{stranded[0].get('name')}' hung after '{node.get('name')}' in respond.io, so it never ran. "
+                "It was left out."
+            )
 
     def _from_triggerWorkflow(self, rid, node, data, step):
         target = self.linked.get(data.get("workflowId")) or self.linked.get(str(data.get("workflowId")))
@@ -300,9 +307,10 @@ class Converter:
             return
         self.notes.append(
             f"'{node.get('name')}' started another respond.io workflow (id {data.get('workflowId')}) that has not "
-            "been imported, so the workflow ends there."
+            "been imported, so the workflow ends there. Importing that workflow later connects it automatically."
         )
-        step.update(type="end", config={}, next={})
+        # Remembered so a later import of that workflow can wire this up.
+        step.update(type="end", config={"respondio_workflow": data.get("workflowId")}, next={})
 
 
 def _linked_workflows(workspace):
@@ -364,4 +372,34 @@ def import_export(workspace, data, *, user=None, name=None, fetch=None):
         WorkflowVersion.objects.create(
             workflow=workflow, number=1, graph=graph, created_by=user, note="Imported from respond.io"
         )
+        converter.notes.extend(_connect_waiting(workspace, data.get("id"), workflow, user))
     return workflow, converter.notes
+
+
+def _connect_waiting(workspace, respondio_id, workflow, user):
+    """Point earlier imports' dead ends for `respondio_id` at the workflow just imported."""
+    from .editing import editable_version
+
+    if not respondio_id:
+        return []
+    notes = []
+    for other in Workflow.objects.for_workspace(workspace).exclude(pk=workflow.pk):
+        latest = other.latest
+        if latest is None:
+            continue
+        waiting = [sid for sid, step in (latest.graph.get("steps") or {}).items()
+                   if step.get("type") == "end"
+                   and str((step.get("config") or {}).get("respondio_workflow")) == str(respondio_id)]
+        if not waiting:
+            continue
+        version = editable_version(other, user)
+        for sid in waiting:
+            step = version.graph["steps"][sid]
+            step["type"] = "start_workflow"
+            step["config"] = {"workflow_id": workflow.pk}
+        version.save(update_fields=["graph", "updated_at"])
+        notes.append(
+            f"'{other.name}' handed over to this workflow in respond.io; draft version {version.number} of "
+            f"'{other.name}' now does too. Publish it for that to take effect."
+        )
+    return notes
