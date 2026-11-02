@@ -108,7 +108,7 @@ def _store_message(channel, payload, profiles):
     # A new chat goes to the switched-on workflow, and a team member's armed
     # phone test runs its draft, unless the message is STOP or a request for a
     # person: those always win.
-    starting = phone_test = None
+    starting = phone_test = quiet_reply = None
     words = extract_body(payload)
     if not _wants_to_stop(words) and not _wants_a_human(words):
         from apps.workflows.models import PhoneTest
@@ -118,6 +118,10 @@ def _store_message(channel, payload, profiles):
             from apps.workflows.engine import starting_workflow
 
             starting = starting_workflow(workspace)
+            # Someone answering a message we sent them is not starting a new
+            # enquiry: the chat goes to the team without the greeting menu.
+            if starting is not None and starting.is_reply_to_us(contact):
+                quiet_reply, starting = starting, None
     if is_new:
         conversation = Conversation(
             workspace=workspace,
@@ -153,6 +157,19 @@ def _store_message(channel, payload, profiles):
 
     channel.last_inbound_at = received_at
     channel.save(update_fields=["last_inbound_at"])
+
+    if quiet_reply is not None:
+        Message.objects.create(
+            workspace=workspace,
+            conversation=conversation,
+            direction=Message.Direction.SYSTEM,
+            actor=Message.Actor.SYSTEM,
+            kind=Message.Kind.TEXT,
+            body=f"Not greeted by '{quiet_reply.name}': this customer is replying to a message we sent them "
+                 f"in the last {quiet_reply.quiet_after_our_message_hours} hours.",
+            payload={"note": True},
+            wa_status=Message.Status.SENT,
+        )
 
     if is_new and starting is None and phone_test is None:
         from apps.agents.allocation import auto_assign

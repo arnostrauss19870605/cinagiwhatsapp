@@ -23,6 +23,8 @@ urlpatterns = [
     path("analytics/", include(("apps.reporting.urls", "reporting"), namespace="reporting")),
     path("questions/", include(("apps.questions.urls", "questions"), namespace="questions")),
     path("workflows/", include(("apps.workflows.urls", "workflows"), namespace="workflows")),
+    path("integrations/", include(("apps.integrations.urls", "integrations"), namespace="integrations")),
+    path("api/v2/", include(("apps.integrations.api_urls", "api"), namespace="api")),
 ]
 
 if settings.DEBUG:

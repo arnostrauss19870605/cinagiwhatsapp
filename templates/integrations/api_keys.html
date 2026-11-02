@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}API{% endblock %}
+{% block content %}
+
+<div class="hero rounded-3xl p-8 text-white shadow-xl shadow-[#0065A9]/20">
+  <p class="text-xs font-semibold uppercase tracking-[.2em] text-[#8ed163]">Connections</p>
+  <h1 class="mt-1 text-3xl font-semibold tracking-tight">API</h1>
+  <p class="mt-2 max-w-2xl text-sm text-sky-100">
+    Lets another system create contacts and send WhatsApp messages from this workspace. It works like
+    respond.io's API: the same addresses after <span class="font-mono">/api/v2/</span>, the same request
+    bodies and the same "Bearer" key, so a system already calling respond.io only needs the new address and key.
+  </p>
+</div>
+
+{% if just_made %}
+  <div class="mt-6 rounded-2xl border border-[#76BD4C] bg-[#76BD4C]/10 p-5" x-data="{copied:false}">
+    <p class="text-sm font-semibold text-[#3d7a1e]">Your new key. Copy it now: it is shown only once.</p>
+    <div class="mt-2 flex flex-wrap items-center gap-2">
+      <code id="new-key" class="break-all rounded-lg bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200">{{ just_made.raw }}</code>
+      <button type="button" @click="navigator.clipboard.writeText(document.getElementById('new-key').textContent); copied=true"
+              class="rounded-lg bg-[#0065A9] px-3 py-2 text-sm font-semibold text-white" x-text="copied ? 'Copied' : 'Copy'"></button>
+    </div>
+  </div>
+{% endif %}
+
+<div class="mt-8 grid gap-8 lg:grid-cols-3">
+  <div class="space-y-8 lg:col-span-2">
+    <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <tr><th class="px-6 py-3">Key</th><th class="px-6 py-3">Last used</th><th class="px-6 py-3"></th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for key in keys %}
+            <tr class="{% if not key.is_active %}text-slate-400{% endif %}">
+              <td class="px-6 py-3.5"><p class="font-medium">{{ key.name }}</p>
+                <p class="font-mono text-xs text-slate-500">{{ key.prefix }}…{% if not key.is_active %} · revoked {{ key.revoked_at|date:"j M Y" }}{% endif %}</p></td>
+              <td class="px-6 py-3.5 text-slate-500">{% if key.last_used_at %}{{ key.last_used_at|timesince }} ago{% else %}never{% endif %}</td>
+              <td class="px-6 py-3.5 text-right">
+                {% if key.is_active %}
+                  <form method="post" action="{% url 'integrations:api_key_revoke' key.pk %}" onsubmit="return confirm('Revoke this key? Anything using it stops working at once.');">
+                    {% csrf_token %}<button class="text-xs text-slate-400 hover:text-rose-600">Revoke</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="px-6 py-10 text-center text-slate-500">No keys yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rounded-2xl bg-white p-6 text-sm text-slate-700 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-base font-semibold text-slate-900">How to call it</h2>
+      <p class="mt-2">Every call sends <code class="rounded bg-slate-100 px-1">Authorization: Bearer &lt;key&gt;</code> and JSON. The key decides the workspace. People are named the respond.io way:
+        <code class="rounded bg-slate-100 px-1">phone:+27821234567</code>, <code class="rounded bg-slate-100 px-1">id:123</code> or <code class="rounded bg-slate-100 px-1">email:name@example.com</code>.</p>
+
+      <p class="mt-4 font-semibold">Create or update a contact</p>
+      <pre class="mt-1 overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs text-slate-100">curl -X POST '{{ base_url }}contact/create_or_update/phone:+27821234567' \
+  -H 'Authorization: Bearer &lt;key&gt;' -H 'Content-Type: application/json' \
+  -d '{"firstName": "Thabo", "lastName": "Mokoena", "email": "thabo@example.com",
+       "custom_fields": [{"name": "policy_number", "value": "GAP12345"}]}'
+→ {"contactId": 42}</pre>
+
+      <p class="mt-4 font-semibold">Send an approved template (works any time)</p>
+      <pre class="mt-1 overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs text-slate-100">curl -X POST '{{ base_url }}contact/phone:+27821234567/message' \
+  -H 'Authorization: Bearer &lt;key&gt;' -H 'Content-Type: application/json' \
+  -d '{"channelId": {{ channels.0.pk|default:1 }},
+       "message": {"type": "whatsapp_template",
+                   "template": {"name": "policy_reminder", "languageCode": "en",
+                                "components": [{"type": "body", "parameters": [
+                                    {"type": "text", "text": "Thabo"}, {"type": "text", "text": "GAP12345"}]}]}}}'
+→ {"contactId": 42, "messageId": "…", "status": "sent"}</pre>
+
+      <p class="mt-4 font-semibold">Send text or a file (only within 24 hours of the person's last message)</p>
+      <pre class="mt-1 overflow-x-auto rounded-xl bg-slate-900 p-4 text-xs text-slate-100">-d '{"message": {"type": "text", "text": "Your claim has been paid."}}'
+-d '{"message": {"type": "attachment", "attachment": {"type": "file", "url": "https://…/statement.pdf", "fileName": "statement.pdf"}}}'</pre>
+
+      <ul class="mt-4 list-disc space-y-1 pl-5 text-xs text-slate-600">
+        <li><code>GET {{ base_url }}contact/phone:+27821234567</code> returns the contact.</li>
+        <li>Leaving out <code>channelId</code> uses this workspace's main number. The template language must match WhatsApp exactly: <code>en_US</code> is not <code>en</code>.</li>
+        <li>Answers: 200 sent · 400 something in the request is wrong (the message says what) · 401 bad key · 422 not sent because the person replied STOP or this server is in test mode · 502 WhatsApp refused it.</li>
+        <li>A message sent here stops any workflow menu running in that chat, and when the person replies they go to the team, not the greeting menu.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <form method="post" class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      {% csrf_token %}
+      <h2 class="text-base font-semibold text-slate-900">New key</h2>
+      <label class="mt-4 block text-sm font-medium text-slate-700">Who will use it
+        <input name="name" required maxlength="120" placeholder="e.g. BIMS policy system" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
+      </label>
+      <button class="mt-4 w-full rounded-xl bg-[#0065A9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#005490]">Make a key</button>
+      <p class="mt-3 text-xs text-slate-500">One key per system, so one can be revoked without breaking the others.</p>
+    </form>
+
+    <div class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-base font-semibold text-slate-900">This workspace's numbers</h2>
+      <p class="mt-1 text-xs text-slate-500">Use the ID as <code>channelId</code>.</p>
+      <ul class="mt-3 space-y-1.5 text-sm">
+        {% for c in channels %}<li class="flex justify-between gap-2"><span>{{ c.display_name }} <span class="text-xs text-slate-500">{{ c.phone_number }}</span></span><span class="num">{{ c.pk }}</span></li>
+        {% empty %}<li class="text-slate-500">No active number.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

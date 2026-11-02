@@ -29,6 +29,11 @@ class Workflow(WorkspaceScopedModel, TimeStampedModel):
     is_active = models.BooleanField(
         default=False, help_text="Switched on: new chats are handled by this workflow."
     )
+    quiet_after_our_message_hours = models.PositiveSmallIntegerField(
+        default=72,
+        help_text="Do not greet someone who is replying to a message we sent them within this many hours "
+                  "(a template, a bulk send, an API message). 0 greets everyone.",
+    )
     published = models.ForeignKey(
         "WorkflowVersion", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -57,6 +62,28 @@ class Workflow(WorkspaceScopedModel, TimeStampedModel):
     @property
     def latest(self):
         return self.versions.order_by("-number").first()
+
+    def is_reply_to_us(self, contact, now=None):
+        """Did we write to this person recently, other than through a workflow?
+
+        Someone answering a message we sent them (a policy reminder, a
+        campaign) is answering that, not starting a new enquiry, so the menu
+        would only get in the way.
+        """
+        import datetime as dt
+
+        from apps.inbox.models import Message
+
+        if not self.quiet_after_our_message_hours:
+            return False
+        since = (now or timezone.now()) - dt.timedelta(hours=self.quiet_after_our_message_hours)
+        return (
+            Message.objects.for_workspace(self.workspace)
+            .filter(conversation__contact=contact, direction=Message.Direction.OUT, created_at__gte=since)
+            .exclude(payload__auto__in=["workflow", "out_of_hours"])
+            .exclude(wa_status__in=[Message.Status.FAILED, Message.Status.BLOCKED])
+            .exists()
+        )
 
     @classmethod
     def starting_for(cls, workspace):

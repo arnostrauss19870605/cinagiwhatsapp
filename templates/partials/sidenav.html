@@ -75,6 +75,10 @@
         <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 3v6m0 0a2 2 0 100 4 2 2 0 000-4zm0 4v8m12-12v2m0 0a2 2 0 100 4 2 2 0 000-4zm0 4v8M6 13h6a6 6 0 006-6"/></svg>
         <span x-show="!$store.nav.collapsed">Workflows</span>
       </a>
+      <a href="{% url 'integrations:api_keys' %}" title="API" class="flex items-center gap-3 rounded-lg px-3 py-2 {% if ns == 'integrations' %}bg-[#0065A9]/10 font-medium text-[#0065A9]{% else %}text-slate-700 hover:bg-slate-100{% endif %}">
+        <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.7 5.7L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.6a1 1 0 01.3-.7l6-6A6 6 0 1121 9z"/></svg>
+        <span x-show="!$store.nav.collapsed">API</span>
+      </a>
     {% endif %}
     {% if membership.may_edit_hours %}
       <a href="{% url 'workspaces:hours' %}" title="Hours" class="flex items-center gap-3 rounded-lg px-3 py-2 {% if name == 'hours' %}bg-[#0065A9]/10 font-medium text-[#0065A9]{% else %}text-slate-700 hover:bg-slate-100{% endif %}">

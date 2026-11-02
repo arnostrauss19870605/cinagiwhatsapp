@@ -150,6 +150,9 @@ def workflow_settings(request, pk):
     else:
         workflow.name = name
         workflow.description = (request.POST.get("description") or "").strip()[:255]
+        quiet = (request.POST.get("quiet_hours") or "").strip()
+        if quiet.isdigit():
+            workflow.quiet_after_our_message_hours = min(int(quiet), 720)
         if request.POST.get("trigger") in Workflow.Trigger.values:
             workflow.trigger = request.POST["trigger"]
             if workflow.trigger != Workflow.Trigger.CHAT_OPENED and workflow.is_active:

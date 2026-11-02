@@ -79,7 +79,8 @@ def send_location(conversation, latitude, longitude, *, name="", address="", aut
     return _finish(conversation, message, result)
 
 
-def send_template(conversation, template, values, *, header_media=None, author=None, actor=Message.Actor.AGENT):
+def send_template(conversation, template, values, *, header_media=None, author=None, actor=Message.Actor.AGENT,
+                  extra_components=None, payload=None):
     # An invitation to an event that has already happened is worse than no
     # invitation, so the campaign window is enforced here rather than trusted
     # to whoever is clicking send.
@@ -115,7 +116,7 @@ def send_template(conversation, template, values, *, header_media=None, author=N
         )
         return _finish(conversation, message, SendResult(ok=False, blocked_reason=reason))
 
-    components = template.build_components(values, header_media=header_media)
+    components = template.build_components(values, header_media=header_media) + list(extra_components or [])
     message = Message(
         workspace=conversation.workspace,
         conversation=conversation,
@@ -130,6 +131,7 @@ def send_template(conversation, template, values, *, header_media=None, author=N
             "language": template.language,
             "values": list(values),
             **({"header_media": header_media} if header_media else {}),
+            **(payload or {}),
         },
     )
     result = conversation.channel.client().send_template(
@@ -273,4 +275,23 @@ def send_stored_file(conversation, stored, *, caption="", actor=Message.Actor.BO
     except Exception as exc:
         logger.warning("stored file send failed conversation=%s", conversation.pk, exc_info=True)
         result = SendResult(ok=False, error=getattr(exc, "friendly", "That file could not be sent."))
+    return _finish(conversation, message, result)
+
+
+def send_media_link(conversation, url, *, kind="document", caption="", filename="", actor=Message.Actor.BOT,
+                    payload=None):
+    """Send a file WhatsApp fetches from a public https link (API callers send these)."""
+    message = Message(
+        workspace=conversation.workspace,
+        conversation=conversation,
+        direction=Message.Direction.OUT,
+        actor=actor,
+        kind=kind,
+        body=caption,
+        media_filename=filename,
+        payload={"link": url, **(payload or {})},
+    )
+    result = conversation.channel.client().send_media(
+        conversation.contact.wa_id, url, kind=kind, caption=caption, filename=filename
+    )
     return _finish(conversation, message, result)
