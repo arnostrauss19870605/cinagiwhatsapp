@@ -85,6 +85,14 @@ def workflow_import(request):
     return redirect("workflows:detail", pk=workflow.pk)
 
 
+def _back(request, workflow):
+    """Where a form should land afterwards: the builder or list view it came from."""
+    target = request.POST.get("next") or ""
+    if target.startswith(f"/workflows/{workflow.pk}/"):
+        return redirect(target)
+    return redirect("workflows:detail", pk=workflow.pk)
+
+
 def _shown_version(workflow):
     return workflow.draft or workflow.published or workflow.latest
 
@@ -161,14 +169,14 @@ def workflow_publish(request, pk):
     draft = workflow.draft
     if draft is None:
         flash.info(request, "There are no unpublished changes.")
-        return redirect("workflows:detail", pk=workflow.pk)
+        return _back(request, workflow)
     found = editing.publish(workflow, draft, user=request.user, request=request)
     if found:
         flash.error(request, "Not published yet - fix the problems listed first.")
     else:
         flash.success(request, f"Version {draft.number} is published. New chats use it from now on; chats already "
                                "part-way through finish on the version they started.")
-    return redirect("workflows:detail", pk=workflow.pk)
+    return _back(request, workflow)
 
 
 @login_required
@@ -205,7 +213,7 @@ def workflow_toggle(request, pk):
         workflow.save(update_fields=["is_active", "updated_at"])
         audit("workflow.switched_off", request=request, target=workflow)
         flash.success(request, f"'{workflow.name}' is off. New chats go straight to the team again.")
-    return redirect("workflows:detail", pk=workflow.pk)
+    return _back(request, workflow)
 
 
 @login_required

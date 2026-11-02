@@ -105,20 +105,25 @@ def _store_message(channel, payload, profiles):
         .first()
     )
     is_new = conversation is None
-    # A new chat goes to the switched-on workflow, unless its very first
-    # message is STOP or a request for a person: those always win.
-    starting = None
-    if is_new:
-        first_words = extract_body(payload)
-        if not _wants_to_stop(first_words) and not _wants_a_human(first_words):
+    # A new chat goes to the switched-on workflow, and a team member's armed
+    # phone test runs its draft, unless the message is STOP or a request for a
+    # person: those always win.
+    starting = phone_test = None
+    words = extract_body(payload)
+    if not _wants_to_stop(words) and not _wants_a_human(words):
+        from apps.workflows.models import PhoneTest
+
+        phone_test = PhoneTest.armed_for(workspace, wa_id)
+        if is_new and phone_test is None:
             from apps.workflows.engine import starting_workflow
 
             starting = starting_workflow(workspace)
+    if is_new:
         conversation = Conversation(
             workspace=workspace,
             channel=channel,
             contact=contact,
-            status=Conversation.Status.BOT if starting else Conversation.Status.QUEUED,
+            status=Conversation.Status.BOT if (starting or phone_test) else Conversation.Status.QUEUED,
         )
 
     conversation.touch_inbound(received_at)
@@ -149,7 +154,7 @@ def _store_message(channel, payload, profiles):
     channel.last_inbound_at = received_at
     channel.save(update_fields=["last_inbound_at"])
 
-    if is_new and starting is None:
+    if is_new and starting is None and phone_test is None:
         from apps.agents.allocation import auto_assign
 
         auto_assign(conversation)
@@ -169,6 +174,8 @@ def _store_message(channel, payload, profiles):
     # customer is on. This is the promise the footer on every template makes.
     elif _wants_a_human(message.body):
         _escalate_to_human(conversation, message)
+    elif phone_test is not None:
+        _start_phone_test(conversation, phone_test)
     elif starting is not None:
         _start_workflow(conversation, starting)
     else:
@@ -218,6 +225,18 @@ def _start_workflow(conversation, workflow):
             conversation.automation_state = {}
             conversation.save(update_fields=["status", "automation_state"])
             auto_assign(conversation)
+
+
+def _start_phone_test(conversation, phone_test):
+    from apps.workflows.engine import start
+
+    phone_test.used_at = timezone.now()
+    phone_test.save(update_fields=["used_at"])
+    try:
+        start(phone_test.workflow, conversation, version=phone_test.version,
+              reason=f"a phone test of version {phone_test.version.number}")
+    except Exception:
+        logger.exception("phone test failed conversation=%s", conversation.pk)
 
 
 def _workflow_reply(conversation, message):

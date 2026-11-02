@@ -340,3 +340,33 @@ def _new_rule_id(rules):
     while f"rule{index}" in taken:
         index += 1
     return f"rule{index}"
+
+
+START = "__start"
+
+
+def connect(graph, source, exit_key, target):
+    """Point one exit (or the start) at a step. Returns an error or None."""
+    steps = graph.get("steps") or {}
+    if target not in steps:
+        return "That step no longer exists."
+    if source == START:
+        graph["start"] = target
+        return None
+    step = steps.get(source)
+    if step is None or exit_key not in g.exits_for(step):
+        return "That connection does not exist any more. Reload the builder."
+    step.setdefault("next", {})[exit_key] = target
+    return None
+
+
+def disconnect(graph, source, exit_key):
+    if source == START:
+        graph["start"] = None
+        return None
+    step = (graph.get("steps") or {}).get(source)
+    if step is None:
+        return "That step no longer exists."
+    if exit_key in (step.get("next") or {}):
+        step["next"][exit_key] = None
+    return None

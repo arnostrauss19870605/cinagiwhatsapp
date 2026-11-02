@@ -392,7 +392,7 @@ class RespondIoImportTests(TestCase):
         self.assertEqual(bodies[-1], "Is there something else we can assist with?")
 
 
-class WorkflowPageTests(TestCase):
+class WorkflowPageBase(TestCase):
     def setUp(self):
         from django.contrib.auth import get_user_model
 
@@ -413,6 +413,8 @@ class WorkflowPageTests(TestCase):
 
         return reverse(f"workflows:{name}", args=args)
 
+
+class WorkflowPageTests(WorkflowPageBase):
     def test_the_pages_render(self):
         for name, args in [("list", []), ("detail", [self.workflow.pk]), ("step_edit", [self.workflow.pk, "menu"]),
                            ("step_edit", [self.workflow.pk, "route"]), ("step_edit", [self.workflow.pk, "hook"]),
@@ -536,3 +538,174 @@ class WorkflowPageTests(TestCase):
         conversation.refresh_from_db()
         self.assertEqual(run.status, WorkflowRun.Status.STOPPED)
         self.assertEqual(conversation.status, Conversation.Status.QUEUED)
+
+
+class BuilderTests(WorkflowPageBase):
+    """The drag-and-drop builder's server side: everything the canvas asks of it."""
+
+    def op(self, **body):
+        response = self.client.post(self.url("builder_op", self.workflow.pk), json.dumps(body),
+                                    content_type="application/json")
+        return response.status_code, response.json()
+
+    def test_the_page_and_its_data(self):
+        self.assertEqual(self.client.get(self.url("builder", self.workflow.pk)).status_code, 200)
+        data = self.client.get(self.url("builder_data", self.workflow.pk)).json()
+        self.assertEqual(data["start"], "hours")
+        menu = next(n for n in data["nodes"] if n["id"] == "menu")
+        self.assertEqual([e["key"] for e in menu["exits"]], ["answered", "invalid", "timeout"])
+        self.assertTrue(all("x" in n and "y" in n for n in data["nodes"]))
+        self.workflow.refresh_from_db()
+        self.assertEqual(set(self.workflow.layout), {n["id"] for n in data["nodes"]})
+
+    def test_moving_boxes_needs_no_draft(self):
+        version = self.workflow.latest
+        version.published_at = timezone.now()
+        version.save()
+        status, _ = self.op(op="move", positions={"menu": {"x": 900, "y": 40}})
+        self.assertEqual(status, 200)
+        self.workflow.refresh_from_db()
+        self.assertEqual(self.workflow.layout["menu"], {"x": 900, "y": 40})
+        self.assertIsNone(self.workflow.draft)
+
+    def test_connecting_and_disconnecting(self):
+        self.op(op="connect", **{"from": "claims_info"}, exit="next", to="done")
+        self.assertEqual(self.workflow.draft.graph["steps"]["claims_info"]["next"]["next"], "done")
+        self.op(op="disconnect", **{"from": "claims_info"}, exit="next")
+        self.assertIsNone(self.workflow.draft.graph["steps"]["claims_info"]["next"]["next"])
+        self.op(op="connect", **{"from": "__start"}, exit="start", to="welcome")
+        self.assertEqual(self.workflow.draft.graph["start"], "welcome")
+
+    def test_a_connection_from_an_exit_a_step_does_not_have_is_refused(self):
+        status, data = self.op(op="connect", **{"from": "welcome"}, exit="answered", to="menu")
+        self.assertEqual(status, 400)
+        self.assertIn("Reload", data["error"])
+
+    def test_adding_and_removing_a_step(self):
+        status, data = self.op(op="add", kind="webhook", x=120, y=300)
+        self.assertEqual(status, 200)
+        added = data["added"]
+        self.assertEqual(self.workflow.draft.graph["steps"][added]["type"], "webhook")
+        self.workflow.refresh_from_db()
+        self.assertEqual(self.workflow.layout[added], {"x": 120, "y": 300})
+        self.assertIn(added, {c["step"] for c in data["checks"]}, "a lone new step is flagged")
+        self.op(op="delete", id=added)
+        self.assertNotIn(added, self.workflow.draft.graph["steps"])
+
+    def test_tidy_lays_the_steps_out_left_to_right(self):
+        _, data = self.op(op="tidy")
+        x = {n["id"]: n["x"] for n in data["nodes"]}
+        self.assertLess(x["hours"], x["welcome"])
+        self.assertLess(x["welcome"], x["menu"])
+
+    def test_the_side_panel_saves_and_tells_the_canvas(self):
+        url = self.url("builder_panel", self.workflow.pk, "welcome")
+        self.assertContains(self.client.get(url), "Welcome to Cinagi.")
+        response = self.client.post(url, {"name": "Hello", "text": "Hi!", "next_next": "menu"})
+        self.assertContains(response, "Saved to the draft.")
+        self.assertIn("workflowChanged", response["HX-Trigger"])
+        self.assertEqual(self.workflow.draft.graph["steps"]["welcome"]["name"], "Hello")
+
+    def test_only_steps_nothing_leads_to_are_flagged(self):
+        from apps.workflows.graph import checks
+
+        graph_ = self.workflow.latest.graph
+        graph_["start"] = "welcome"
+        flagged = [c["step"] for c in checks(graph_) if "Nothing leads" in c["text"]]
+        self.assertEqual(flagged, ["hours"], "steps only reachable through 'hours' are not listed one by one")
+
+    def test_the_builder_is_for_managers_and_this_workspace_only(self):
+        other = Workflow.objects.create(workspace=Workspace.objects.create(name="Elsewhere"), name="Theirs")
+        self.assertEqual(self.client.get(self.url("builder_data", other.pk)).status_code, 404)
+        self.client.force_login(self.agent)
+        self.assertEqual(self.client.get(self.url("builder", self.workflow.pk)).status_code, 403)
+        response = self.client.post(self.url("builder_op", self.workflow.pk), "{}", content_type="application/json")
+        self.assertEqual(response.status_code, 403)
+
+
+class TestChatTests(WorkflowPageBase):
+    def say(self, **body):
+        return self.client.post(self.url("builder_simulate", self.workflow.pk), json.dumps(body),
+                                content_type="application/json").json()
+
+    def test_a_conversation_on_screen(self):
+        data = self.say(action="start")
+        texts = [m["text"] for m in data["messages"] if m["from"] == "bot"]
+        self.assertEqual(texts, ["Welcome to Cinagi.", "How can we help?"])
+        self.assertTrue(data["waiting"])
+        self.assertEqual(data["step"], "menu")
+        data = self.say(text="Policy", reply_id="wf:menu:0")
+        self.assertEqual(data["messages"][-1]["text"], "Your ID number?")
+        data = self.say(text="8001015009087")
+        notes = [m["text"] for m in data["messages"] if m["from"] == "note"]
+        self.assertTrue(any("Would call the webhook" in n for n in notes))
+        self.assertTrue(any("resolved" in n for n in notes))
+
+    def test_nothing_real_happens(self):
+        with mock.patch("apps.workflows.webhooks.requests.post") as post, \
+                mock.patch("apps.channels_wa.messaging.meta_cloud.MetaCloudChannel._post_message") as send:
+            self.say(action="start")
+            self.say(text="Policy")
+            self.say(text="8001015009087")
+        post.assert_not_called()
+        send.assert_not_called()
+        self.assertFalse(Message.objects.exists())
+        self.assertFalse(Contact.objects.exists())
+
+    def test_after_hours_and_no_answer(self):
+        data = self.say(action="start", after_hours=True)
+        self.assertEqual([m["text"] for m in data["messages"] if m["from"] == "bot"], ["We are closed."])
+        self.say(action="start")
+        data = self.say(action="timeout")
+        self.assertIn("nobody answered", data["messages"][-1]["text"])
+
+    def test_wrong_answers_are_asked_again_like_the_real_thing(self):
+        self.say(action="start")
+        data = self.say(text="banana")
+        self.assertEqual([m["text"] for m in data["messages"] if m["from"] == "bot"],
+                         [engine.DEFAULT_INVALID, "How can we help?"])
+
+
+class PhoneTestTests(WorkflowTestBase):
+    def test_an_armed_number_runs_the_draft_once(self):
+        from apps.workflows.models import PhoneTest
+
+        draft = WorkflowVersion.objects.create(workflow=self.workflow, number=2, graph=graph(self.connection.pk))
+        draft.graph["steps"]["welcome"]["config"]["text"] = "Draft welcome."
+        draft.save()
+        PhoneTest.objects.create(workspace=self.workspace, workflow=self.workflow, version=draft, wa_id=NUMBER,
+                                 expires_at=timezone.now() + dt.timedelta(minutes=30))
+        self.inbound("Hi")
+        self.assertEqual(self.bodies()[0], "Draft welcome.")
+        self.assertEqual(self.run_().version, draft)
+        self.assertIsNotNone(PhoneTest.objects.get().used_at)
+
+    def test_an_expired_test_runs_the_live_version(self):
+        from apps.workflows.models import PhoneTest
+
+        PhoneTest.objects.create(workspace=self.workspace, workflow=self.workflow, version=self.version,
+                                 wa_id=NUMBER, expires_at=timezone.now() - dt.timedelta(minutes=1))
+        self.inbound("Hi")
+        self.assertIsNone(PhoneTest.objects.get().used_at)
+        self.assertEqual(self.bodies()[0], "Welcome to Cinagi.")
+
+    def test_stop_still_wins_over_a_phone_test(self):
+        from apps.workflows.models import PhoneTest
+
+        PhoneTest.objects.create(workspace=self.workspace, workflow=self.workflow, version=self.version,
+                                 wa_id=NUMBER, expires_at=timezone.now() + dt.timedelta(minutes=30))
+        self.inbound("STOP")
+        self.assertFalse(WorkflowRun.objects.exists())
+
+    def test_arming_from_the_builder(self):
+        from django.contrib.auth import get_user_model
+        from django.urls import reverse
+
+        from apps.workflows.models import PhoneTest
+        from apps.workspaces.models import WorkspaceMembership
+
+        manager = get_user_model().objects.create_user("m", "m@example.com", "pw12345678")
+        WorkspaceMembership.objects.create(user=manager, workspace=self.workspace, role="admin")
+        self.client.force_login(manager)
+        self.client.post(reverse("workflows:builder_phone_test", args=[self.workflow.pk]), {"number": "072 612 4698"})
+        self.assertEqual(PhoneTest.objects.get().wa_id, NUMBER)

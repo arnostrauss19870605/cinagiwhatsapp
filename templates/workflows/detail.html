@@ -23,6 +23,7 @@
     </div>
   </div>
   <div class="flex flex-wrap gap-2">
+    <a href="{% url 'workflows:builder' workflow.pk %}" class="rounded-xl border border-[#0065A9] px-4 py-2 text-sm font-semibold text-[#0065A9] transition hover:bg-[#0065A9]/5">Open the builder</a>
     {% if version and version.editable %}
       <form method="post" action="{% url 'workflows:publish' workflow.pk %}">{% csrf_token %}
         <button class="rounded-xl bg-[#0065A9] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490] disabled:opacity-50" {% if problems %}disabled title="Fix the problems listed first"{% endif %}>
@@ -70,7 +71,7 @@
 
 <div class="mt-8 grid gap-8 lg:grid-cols-3">
   <div class="space-y-3 lg:col-span-2">
-    <h2 class="text-sm font-semibold text-slate-700">Steps, in the order a customer meets them</h2>
+    <h2 class="text-sm font-semibold text-slate-700">Steps, in the order a customer meets them <span class="font-normal text-slate-500">· or <a href="{% url 'workflows:builder' workflow.pk %}" class="text-[#0065A9] hover:underline">see them as a diagram</a></span></h2>
     {% for item in steps %}
       <div id="step-{{ item.id }}" class="scroll-mt-24 rounded-2xl bg-white p-5 shadow-sm ring-1 {% if item.unreached %}ring-amber-300{% else %}ring-slate-200{% endif %} target:ring-2 target:ring-[#0065A9]">
         <div class="flex items-start justify-between gap-3">

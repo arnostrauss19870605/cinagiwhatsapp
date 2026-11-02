@@ -29,7 +29,7 @@
             <tr class="transition hover:bg-slate-50/70">
               <td class="px-6 py-4">
                 <a href="{% url 'workflows:detail' workflow.pk %}" class="font-medium text-[#0065A9] hover:underline">{{ workflow.name }}</a>
-                <p class="mt-0.5 text-xs text-slate-500">{{ workflow.get_trigger_display }}</p>
+                <p class="mt-0.5 text-xs text-slate-500">{{ workflow.get_trigger_display }} · <a href="{% url 'workflows:builder' workflow.pk %}" class="text-[#0065A9] hover:underline">Builder</a></p>
               </td>
               <td class="px-6 py-4">
                 {% if workflow.is_active %}

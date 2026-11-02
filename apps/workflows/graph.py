@@ -132,13 +132,31 @@ def match_option(options, *, reply_id="", text="", step_id=""):
 
 def problems(graph, *, workspace=None):
     """Plain-language reasons this graph cannot be published. Empty = fine."""
+    return [c["text"] for c in checks(graph, workspace=workspace) if c["level"] == "error"]
+
+
+# WhatsApp's own size limits; a longer message is rejected outright.
+MAX_TEXT, MAX_INTERACTIVE_BODY, MAX_CAPTION = 4096, 1024, 1024
+
+
+def checks(graph, *, workspace=None):
+    """Everything worth telling the editor, step by step.
+
+    Each item is {"step": step id or None, "level": "error" | "warning", "text": ...}.
+    Errors stop publishing; warnings are things that work but are probably
+    not what was meant.
+    """
     found = []
     steps = graph.get("steps") or {}
-    start = graph.get("start")
+
+    def add(step_id, text, level="error"):
+        found.append({"step": step_id, "level": level, "text": text})
+
     if not steps:
-        return ["The workflow has no steps yet."]
-    if start not in steps:
-        found.append("The workflow does not say which step comes first.")
+        add(None, "The workflow has no steps yet.")
+        return found
+    if graph.get("start") not in steps:
+        add(None, "The workflow does not say which step comes first.")
 
     def name(step_id):
         return (steps.get(step_id) or {}).get("name") or step_id
@@ -146,36 +164,72 @@ def problems(graph, *, workspace=None):
     for step_id, step in steps.items():
         kind = step.get("type")
         config = step.get("config") or {}
+        n = name(step_id)
         if kind not in STEP_TYPES:
-            found.append(f"'{name(step_id)}' is a kind of step this platform does not know.")
+            add(step_id, f"'{n}' is a kind of step this platform does not know.")
             continue
-        for exit_key, target in (step.get("next") or {}).items():
+        for target in (step.get("next") or {}).values():
             if target and target not in steps:
-                found.append(f"'{name(step_id)}' leads to a step that no longer exists.")
-        if kind == "send_message" and not (config.get("text") or "").strip() and not config.get("file_id"):
-            found.append(f"'{name(step_id)}' has nothing to send.")
+                add(step_id, f"'{n}' leads to a step that no longer exists.")
+        text = (config.get("text") or "").strip()
+        if kind == "send_message":
+            if not text and not config.get("file_id"):
+                add(step_id, f"'{n}' has nothing to send.")
+            limit = MAX_CAPTION if config.get("file_id") else MAX_TEXT
+            if len(text) > limit:
+                add(step_id, f"'{n}' is {len(text)} characters long; WhatsApp allows {limit}"
+                             f"{' under a file' if config.get('file_id') else ''}.")
         if kind == "ask_question":
-            if not (config.get("text") or "").strip():
-                found.append(f"'{name(step_id)}' has no question.")
-            if config.get("answer") == "choice" and not config.get("options"):
-                found.append(f"'{name(step_id)}' has no options to pick from.")
+            options = config.get("options") or []
+            if not text:
+                add(step_id, f"'{n}' has no question.")
+            if config.get("answer") == "choice":
+                if not options:
+                    add(step_id, f"'{n}' has no options to pick from.")
+                elif presentation(options) == "numbered":
+                    add(step_id, f"'{n}' has more than {MAX_LIST_ROWS} options or an option over {LIST_LABEL} "
+                                 "characters, so it shows as a numbered list instead of tap buttons.", "warning")
+                if presentation(options) != "numbered" and len(text) > MAX_INTERACTIVE_BODY:
+                    add(step_id, f"'{n}' is {len(text)} characters long; WhatsApp allows "
+                                 f"{MAX_INTERACTIVE_BODY} above tap buttons or a list.")
+                if len({normalise(o) for o in options}) != len(options):
+                    add(step_id, f"'{n}' has the same option twice.")
+            elif len(text) > MAX_TEXT:
+                add(step_id, f"'{n}' is {len(text)} characters long; WhatsApp allows {MAX_TEXT}.")
+            if not (step.get("next") or {}).get("answered"):
+                add(step_id, f"Nothing happens after someone answers '{n}'.", "warning")
         if kind == "branch":
             for rule in config.get("rules") or []:
                 if not rule.get("conditions"):
-                    found.append(f"A rule in '{name(step_id)}' has no conditions.")
+                    add(step_id, f"The rule '{rule.get('name') or 'rule'}' in '{n}' has no conditions.")
+                elif not (step.get("next") or {}).get(rule.get("id")):
+                    add(step_id, f"The rule '{rule.get('name') or 'rule'}' in '{n}' leads nowhere, so the "
+                                 "workflow ends there.", "warning")
         if kind == "jump" and config.get("target") not in steps:
-            found.append(f"'{name(step_id)}' jumps to a step that does not exist.")
+            add(step_id, f"'{n}' jumps to a step that does not exist.")
         if kind == "webhook" and not config.get("connection_id"):
-            found.append(f"'{name(step_id)}' does not say which webhook to call.")
+            add(step_id, f"'{n}' does not say which webhook to call.")
         if kind == "update_contact" and not (config.get("field") or "").strip():
-            found.append(f"'{name(step_id)}' does not say which detail to update.")
+            add(step_id, f"'{n}' does not say which detail to update.")
         if kind == "audience" and not config.get("audience_id"):
-            found.append(f"'{name(step_id)}' does not say which audience.")
+            add(step_id, f"'{n}' does not say which audience.")
         if kind == "start_workflow" and not config.get("workflow_id"):
-            found.append(f"'{name(step_id)}' does not say which workflow to start.")
+            add(step_id, f"'{n}' does not say which workflow to start.")
+
+    # Only steps nothing points at are flagged: the steps after them are cut
+    # off too, but saying so for every one of them would bury the cause.
+    pointed_at = {graph.get("start")}
+    for step in steps.values():
+        pointed_at.update(t for t in (step.get("next") or {}).values() if t)
+        if step.get("type") == "jump":
+            pointed_at.add((step.get("config") or {}).get("target"))
+    for step_id in steps:
+        if step_id not in pointed_at:
+            add(step_id, f"Nothing leads to '{name(step_id)}', so nobody will reach it.", "warning")
 
     if workspace is not None:
-        found.extend(_missing_references(steps, workspace, name))
+        for step_id, text in _missing_references(steps, workspace, name):
+            add(step_id, text)
     return found
 
 
@@ -191,13 +245,13 @@ def _missing_references(steps, workspace, name):
         for key in wanted:
             if config.get(key):
                 wanted[key].add(config[key])
-    checks = (
+    lookups = (
         ("file_id", WorkflowFile, "a file that has been deleted"),
         ("connection_id", WebhookConnection, "a webhook that has been deleted"),
         ("audience_id", Audience, "an audience that has been deleted"),
         ("workflow_id", Workflow, "a workflow that has been deleted"),
     )
-    for key, model, words in checks:
+    for key, model, words in lookups:
         if not wanted[key]:
             continue
         present = set(
@@ -206,7 +260,7 @@ def _missing_references(steps, workspace, name):
         for step_id, step in steps.items():
             value = (step.get("config") or {}).get(key)
             if value and value not in present:
-                found.append(f"'{name(step_id)}' uses {words}.")
+                found.append((step_id, f"'{name(step_id)}' uses {words}."))
     return found
 
 

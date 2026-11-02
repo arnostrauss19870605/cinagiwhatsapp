@@ -114,7 +114,11 @@ def handle_reply(conversation, message):
         if step.get("type") != "ask_question":
             return False
         config = step.get("config") or {}
-        value, valid = _read_answer(step_id, config, message)
+        from apps.channels_wa.inbound import selection_id
+
+        value, valid = read_answer(
+            step_id, config, message.body, reply_id=selection_id(message.payload or {})
+        )
         if valid:
             _save_answer(run, config, value)
             run.status = WorkflowRun.Status.RUNNING
@@ -142,16 +146,13 @@ def handle_reply(conversation, message):
         return True
 
 
-def _read_answer(step_id, config, message):
-    from apps.channels_wa.inbound import selection_id
-
+def read_answer(step_id, config, body, *, reply_id=""):
+    """(value, valid) for a reply to an ask_question step. Shared with the test chat."""
     kind = config.get("answer", "text")
-    text = (message.body or "").strip()
+    text = (body or "").strip()
     if kind == "choice":
         options = config.get("options") or []
-        index = g.match_option(
-            options, reply_id=selection_id(message.payload or {}), text=text, step_id=step_id
-        )
+        index = g.match_option(options, reply_id=reply_id, text=text, step_id=step_id)
         if index is None:
             return None, False
         return str(options[index]).strip(), True
@@ -340,27 +341,29 @@ def _ask(run, step_id, step, *, again=False):
 
 
 def _branch(run, step_id, step, config):
-    for rule in config.get("rules") or []:
-        if _rule_matches(run, rule):
-            _log(run, step_id, step, f"Took '{rule.get('name') or 'rule'}'")
-            return ("exit", rule["id"])
+    rule = choose_rule(config, run.variables or {}, lambda field: _contact_detail(run.contact, field))
+    if rule is not None:
+        _log(run, step_id, step, f"Took '{rule.get('name') or 'rule'}'")
+        return ("exit", rule["id"])
     _log(run, step_id, step, "Took 'anything else'")
     return ("exit", "else")
 
 
-def _rule_matches(run, rule):
-    results = [_condition(run, c) for c in rule.get("conditions") or []]
-    if not results:
-        return False
-    return any(results) if rule.get("match") == "any" else all(results)
+def choose_rule(config, variables, contact_detail):
+    """The first branch rule that matches, or None. Shared with the test chat."""
+    for rule in config.get("rules") or []:
+        results = [_condition(c, variables, contact_detail) for c in rule.get("conditions") or []]
+        if results and (any(results) if rule.get("match") == "any" else all(results)):
+            return rule
+    return None
 
 
-def _condition(run, condition):
+def _condition(condition, variables, contact_detail):
     field = (condition.get("field") or "").strip()
     if condition.get("source") == "contact":
-        actual = _contact_detail(run.contact, field)
+        actual = contact_detail(field)
     else:
-        actual = (run.variables or {}).get(field, "")
+        actual = variables.get(field, "")
     actual, wanted = g.normalise(actual), g.normalise(condition.get("value"))
     operator = condition.get("operator", "equals")
     if operator == "equals":

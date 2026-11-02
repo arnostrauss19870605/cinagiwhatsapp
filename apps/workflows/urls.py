@@ -1,8 +1,14 @@
 from django.urls import path
 
-from . import views
+from . import builder, views
 
 urlpatterns = [
+    path("<int:pk>/builder/", builder.builder, name="builder"),
+    path("<int:pk>/builder/data/", builder.builder_data, name="builder_data"),
+    path("<int:pk>/builder/op/", builder.builder_op, name="builder_op"),
+    path("<int:pk>/builder/simulate/", builder.builder_simulate, name="builder_simulate"),
+    path("<int:pk>/builder/phone-test/", builder.builder_phone_test, name="builder_phone_test"),
+    path("<int:pk>/builder/steps/<str:step_id>/", builder.builder_panel, name="builder_panel"),
     path("", views.workflow_list, name="list"),
     path("import/", views.workflow_import, name="import"),
     path("webhooks/", views.connections, name="connections"),

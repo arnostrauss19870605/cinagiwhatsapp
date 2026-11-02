@@ -32,6 +32,10 @@ class Workflow(WorkspaceScopedModel, TimeStampedModel):
     published = models.ForeignKey(
         "WorkflowVersion", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # Where each step sits on the builder's canvas. Kept apart from the
+    # versions: moving a box changes nothing for customers, so it needs no
+    # draft and no publishing.
+    layout = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ("name",)
@@ -219,3 +223,33 @@ class RunEvent(WorkspaceScopedModel):
 
     def __str__(self):
         return f"{self.step_name}: {self.outcome}"
+
+
+class PhoneTest(WorkspaceScopedModel, TimeStampedModel):
+    """A team member's own number, armed to run a draft on their next message.
+
+    This is how a draft is tried on a real phone before anyone else sees it:
+    the person messages the WhatsApp number as usual, and that one chat runs
+    the draft instead of the live version.
+    """
+
+    workflow = models.ForeignKey(Workflow, on_delete=models.CASCADE, related_name="phone_tests")
+    version = models.ForeignKey(WorkflowVersion, on_delete=models.CASCADE, related_name="+")
+    wa_id = models.CharField(max_length=32)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    @classmethod
+    def armed_for(cls, workspace, wa_id):
+        return (
+            cls.objects.for_workspace(workspace)
+            .filter(wa_id=wa_id, used_at__isnull=True, expires_at__gt=timezone.now())
+            .select_related("workflow", "version")
+            .first()
+        )
