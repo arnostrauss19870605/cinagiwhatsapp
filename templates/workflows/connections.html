@@ -38,7 +38,18 @@
           <code x-show="!show" class="rounded bg-slate-100 px-2 py-1 text-slate-500">••••••••••••</code>
           <code x-show="show" x-cloak class="break-all rounded bg-slate-100 px-2 py-1 text-slate-800">{{ c.token }}</code>
           <button type="button" @click="show=!show" class="text-[#0065A9] hover:underline" x-text="show ? 'Hide' : 'Show'"></button>
+          {% if c.token_header %}<span class="text-slate-500">sent in the <code class="rounded bg-slate-100 px-1">{{ c.token_header }}</code> header</span>{% endif %}
         </div>
+        <details class="mt-3 text-sm">
+          <summary class="cursor-pointer text-xs font-medium text-[#0065A9]">
+            Format{% if c.body_template %} &middot; <span class="text-slate-500">their own body</span>{% else %} &middot; <span class="text-slate-500">our standard body</span>{% endif %}
+          </summary>
+          <form method="post" action="{% url 'workflows:connection_update' c.pk %}" class="mt-3 space-y-3">
+            {% csrf_token %}<input type="hidden" name="action" value="format">
+            {% include "workflows/partials/webhook_format_fields.html" with header=c.token_header body=c.body_template %}
+            <button class="rounded-lg bg-[#0065A9] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#005490]">Save format</button>
+          </form>
+        </details>
       </div>
     {% empty %}
       <div class="rounded-2xl bg-white p-10 text-center text-slate-500 shadow-sm ring-1 ring-slate-200">
@@ -71,6 +82,12 @@
   "answers": {"Main_Menu": "Policy &amp; Benefits", "last_answer": "0721234567"}
 }</pre>
         <p>A JSON object sent back is remembered for later steps if the step names it.</p>
+        <p>If the receiver has a format of its own, open <strong>Format</strong> on the webhook and paste the body it
+          expects. Put <code class="rounded bg-slate-100 px-1">{% templatetag openvariable %}name{% templatetag closevariable %}</code> where a value goes: any answer or
+          contact detail the workflow saved (e.g. <code class="rounded bg-slate-100 px-1">id_number</code>), or
+          <code class="rounded bg-slate-100 px-1">wa_id</code>, <code class="rounded bg-slate-100 px-1">local_number</code>
+          (0721234567), <code class="rounded bg-slate-100 px-1">name</code>. In quotes it is sent as text; without quotes a
+          whole number is sent as a number.</p>
       </div>
     </details>
   </div>
@@ -87,6 +104,10 @@
     <label class="mt-3 block text-sm font-medium text-slate-700">Token <span class="font-normal text-slate-400">(leave empty to make one)</span>
       <input name="token" maxlength="200" autocomplete="off" class="mt-1.5 w-full rounded-xl border-slate-300 text-sm shadow-sm">
     </label>
+    <details class="mt-3 text-sm">
+      <summary class="cursor-pointer text-xs font-medium text-[#0065A9]">The receiver wants its own format</summary>
+      <div class="mt-3 space-y-3">{% include "workflows/partials/webhook_format_fields.html" with header="" body="" %}</div>
+    </details>
     <button class="mt-5 w-full rounded-xl bg-[#0065A9] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005490]">Add webhook</button>
   </form>
 </div>

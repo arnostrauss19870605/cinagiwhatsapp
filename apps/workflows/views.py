@@ -1,6 +1,7 @@
 """Workflow pages: the list, one workflow's steps, step settings, webhooks and files."""
 
 import json
+import re
 
 from django.contrib import messages as flash
 from django.contrib.auth.decorators import login_required
@@ -378,14 +379,18 @@ def connections(request):
     if request.method == "POST":
         name = (request.POST.get("name") or "").strip()[:120]
         url = (request.POST.get("url") or "").strip()
+        token_header, body_template, problem = _webhook_format(request)
         if not name or not url.startswith("https://"):
             flash.error(request, "Give the webhook a name and an https:// web address.")
         elif WebhookConnection.objects.for_request(request).filter(name__iexact=name).exists():
             flash.error(request, f"There is already a webhook called '{name}'.")
+        elif problem:
+            flash.error(request, problem)
         else:
             connection = WebhookConnection.objects.create(
                 workspace=request.workspace, name=name, url=url[:500],
                 token=(request.POST.get("token") or "").strip() or WebhookConnection.new_token(),
+                token_header=token_header, body_template=body_template,
             )
             audit("webhook.created", request=request, target=connection, url=connection.url)
             flash.success(request, f"'{name}' added. Give its token to whoever runs the receiving end.")
@@ -415,7 +420,29 @@ def connection_update(request, pk):
         connection.is_active = not connection.is_active
         connection.save(update_fields=["is_active", "updated_at"])
         audit("webhook.switched", request=request, target=connection, on=connection.is_active)
+    elif action == "format":
+        token_header, body_template, problem = _webhook_format(request)
+        if problem:
+            flash.error(request, problem)
+        else:
+            connection.token_header, connection.body_template = token_header, body_template
+            connection.save(update_fields=["token_header", "body_template", "updated_at"])
+            audit("webhook.format_changed", request=request, target=connection, header=token_header or "Bearer",
+                  custom_body=bool(body_template))
+            flash.success(request, f"'{connection.name}' saved.")
     return redirect("workflows:connections")
+
+
+def _webhook_format(request):
+    """(token header, body template, problem) from a webhook form."""
+    from .webhooks import template_problem
+
+    token_header = (request.POST.get("token_header") or "").strip()[:60]
+    body_template = (request.POST.get("body_template") or "").strip()
+    if token_header and not re.fullmatch(r"[A-Za-z0-9-]+", token_header):
+        return token_header, body_template, "A header name can only use letters, numbers and dashes, e.g. authKey."
+    problem = template_problem(body_template)
+    return token_header, body_template, problem
 
 
 @login_required

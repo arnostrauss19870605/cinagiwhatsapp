@@ -168,6 +168,14 @@ class WebhookConnection(WorkspaceScopedModel, TimeStampedModel):
     name = models.CharField(max_length=120)
     url = models.URLField(max_length=500, help_text="The https web address that receives the details.")
     token = EncryptedTextField(help_text="Sent with every call so the receiver knows it came from us.")
+    token_header = models.CharField(
+        max_length=60, blank=True,
+        help_text="Send the token in this header instead of 'Authorization: Bearer', e.g. authKey.",
+    )
+    body_template = models.TextField(
+        blank=True,
+        help_text="The exact body the receiver expects, with {{placeholders}}. Empty sends our standard body.",
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:

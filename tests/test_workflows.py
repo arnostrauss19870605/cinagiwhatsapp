@@ -263,6 +263,39 @@ class StepTests(WorkflowTestBase):
         self.assertEqual(self.bodies()[-1], "Documents are on their way.")
         self.assertEqual(conversation.status, Conversation.Status.RESOLVED)
 
+    @override_settings(OUTBOUND_COMMS_MODE="live")
+    def test_a_webhook_with_its_own_format_sends_that_body_and_header(self):
+        self.connection.token_header = "authKey"
+        self.connection.body_template = (
+            '{"PolicyNumber": {{policy_number}}, "WhatsAppRequest": "0001", "CellphoneNumber": "{{local_number}}",'
+            ' "IDNumber": "{{id_number}}", "MultiplePolicies": "N"}'
+        )
+        self.connection.save()
+        Contact.objects.create(workspace=self.workspace, wa_id=NUMBER, attributes={"policy_number": "1000172"})
+        with mock.patch(
+            "apps.channels_wa.messaging.meta_cloud.MetaCloudChannel._post_message",
+            return_value=SendResult(ok=True, wamid="wamid.out"),
+        ), mock.patch("apps.workflows.webhooks.requests.post", return_value=mock.Mock(status_code=200)) as post:
+            self.inbound("Hi")
+            self.inbound("Policy")
+            self.inbound("8001015009087")
+        headers = post.call_args.kwargs["headers"]
+        self.assertEqual(headers["authKey"], "secret-token")
+        self.assertNotIn("Authorization", headers)
+        self.assertEqual(json.loads(post.call_args.kwargs["data"]), {
+            "PolicyNumber": 1000172, "WhatsAppRequest": "0001", "CellphoneNumber": "0" + NUMBER[2:],
+            "IDNumber": "8001015009087", "MultiplePolicies": "N",
+        })
+
+    def test_body_templates_keep_text_as_text_and_refuse_broken_json(self):
+        from apps.workflows.webhooks import render_template, template_problem
+
+        body = render_template('{"a": {{n}}, "b": {{z}}, "c": "Hi {{name}}, \\"{{q}}\\"", "d": {{missing}}}',
+                               {"n": "42", "z": "0721", "name": 'Thabo "T"', "q": "x"})
+        self.assertEqual(body, {"a": 42, "b": "0721", "c": 'Hi Thabo "T", "x"', "d": None})
+        self.assertEqual(template_problem(""), "")
+        self.assertIn("not valid JSON", template_problem('{"a": {{n}}'))
+
     def test_in_test_mode_the_webhook_is_not_called_and_the_failure_path_runs(self):
         with mock.patch("apps.workflows.webhooks.requests.post") as post:
             self.inbound("Hi")
@@ -605,6 +638,20 @@ class WorkflowPageTests(WorkflowPageBase):
         with db.cursor() as cursor:
             cursor.execute("SELECT token FROM workflows_webhookconnection WHERE id = %s", [hook.pk])
             self.assertNotEqual(cursor.fetchone()[0], hook.token)
+
+    def test_a_webhook_format_that_is_not_json_is_refused(self):
+        hook = WebhookConnection.objects.create(workspace=self.workspace, name="Docs", url="https://x.example.com",
+                                                token="t")
+        response = self.client.post(self.url("connection_update", hook.pk),
+                                    {"action": "format", "token_header": "authKey", "body_template": "{oops"},
+                                    follow=True)
+        self.assertContains(response, "not valid JSON")
+        hook.refresh_from_db()
+        self.assertEqual(hook.body_template, "")
+        self.client.post(self.url("connection_update", hook.pk),
+                         {"action": "format", "token_header": "authKey", "body_template": '{"a": "{{id_number}}"}'})
+        hook.refresh_from_db()
+        self.assertEqual((hook.token_header, hook.body_template), ("authKey", '{"a": "{{id_number}}"}'))
 
     def test_the_stop_button_in_a_chat_hands_it_to_the_team(self):
         channel = WhatsAppChannel.objects.create(workspace=self.workspace, display_name="S", phone_number_id="9")

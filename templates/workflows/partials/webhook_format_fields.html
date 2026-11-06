@@ -1,0 +1,8 @@
+<label class="block text-xs font-medium text-slate-700">Send the token in this header
+  <span class="font-normal text-slate-400">(empty: Authorization: Bearer)</span>
+  <input name="token_header" value="{{ header }}" maxlength="60" placeholder="e.g. authKey" class="mt-1 w-full rounded-lg border-slate-300 text-sm shadow-sm">
+</label>
+<label class="block text-xs font-medium text-slate-700">Body
+  <span class="font-normal text-slate-400">(empty: our standard body)</span>
+  <textarea name="body_template" rows="7" spellcheck="false" placeholder='{"PolicyNumber": {% templatetag openvariable %}policy_number{% templatetag closevariable %}, "IDNumber": "{% templatetag openvariable %}id_number{% templatetag closevariable %}"}' class="mt-1 w-full rounded-lg border-slate-300 font-mono text-xs shadow-sm">{{ body }}</textarea>
+</label>

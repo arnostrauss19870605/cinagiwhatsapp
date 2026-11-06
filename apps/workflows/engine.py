@@ -454,7 +454,12 @@ def _webhook(run, step_id, step, config):
     if connection is None:
         ok, detail = False, {"reason": "The webhook has been deleted."}
     else:
-        ok, detail = webhooks.call(connection, webhooks.payload_for(run, step_id, step), wa_id=run.contact.wa_id)
+        try:
+            body = webhooks.body_for(connection, run, step_id, step)
+        except ValueError as exc:
+            ok, detail = False, {"reason": f"The webhook '{connection.name}' has a broken body. {exc}"}
+        else:
+            ok, detail = webhooks.call(connection, body, wa_id=run.contact.wa_id)
     _log(run, step_id, step, "Webhook worked" if ok else f"Webhook failed: {detail.get('reason', '')}"[:255],
          detail=detail)
     save_as = (config.get("save_as") or "").strip()
