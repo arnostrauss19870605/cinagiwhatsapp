@@ -87,7 +87,8 @@
           contact detail the workflow saved (e.g. <code class="rounded bg-slate-100 px-1">id_number</code>), or
           <code class="rounded bg-slate-100 px-1">wa_id</code>, <code class="rounded bg-slate-100 px-1">local_number</code>
           (0721234567), <code class="rounded bg-slate-100 px-1">name</code>. In quotes it is sent as text; without quotes a
-          whole number is sent as a number.</p>
+          whole number is sent as a number. Add <code class="rounded bg-slate-100 px-1">|international</code> to send a cell
+          number as 27721234567, e.g. <code class="rounded bg-slate-100 px-1">{% templatetag openvariable %}cell_number|international{% templatetag closevariable %}</code>.</p>
       </div>
     </details>
   </div>

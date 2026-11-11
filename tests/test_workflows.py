@@ -296,6 +296,16 @@ class StepTests(WorkflowTestBase):
         self.assertEqual(template_problem(""), "")
         self.assertIn("not valid JSON", template_problem('{"a": {{n}}'))
 
+    def test_a_cell_number_can_be_sent_in_international_form(self):
+        from apps.workflows.webhooks import render_template, template_problem
+
+        body = render_template(
+            '{"CellphoneNumber": "{{cell|international}}", "Other": "{{other | international}}", "None": {{gone|international}}}',
+            {"cell": "072 612 4698", "other": "+27 72 612 4698"},
+        )
+        self.assertEqual(body, {"CellphoneNumber": "27726124698", "Other": "27726124698", "None": None})
+        self.assertIn("international", template_problem('{"a": "{{cell|shout}}"}'))
+
     def test_in_test_mode_the_webhook_is_not_called_and_the_failure_path_runs(self):
         with mock.patch("apps.workflows.webhooks.requests.post") as post:
             self.inbound("Hi")

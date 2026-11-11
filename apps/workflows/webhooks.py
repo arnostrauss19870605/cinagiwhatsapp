@@ -64,12 +64,35 @@ def values_for(run):
     }
 
 
+def international(text):
+    """A South African local number (0721234567) as 27721234567; anything else as its digits."""
+    digits = re.sub(r"\D", "", text)
+    if len(digits) == 10 and digits.startswith("0"):
+        return "27" + digits[1:]
+    return digits
+
+
+FILTERS = {"international": international}
+
+
+def _placeholder(inner, values):
+    name, _, filter_name = inner.partition("|")
+    name, filter_name = name.strip(), filter_name.strip()
+    if filter_name and filter_name not in FILTERS:
+        raise ValueError(f"'{filter_name}' is not something a value can be turned into. Use: {', '.join(FILTERS)}.")
+    value = values.get(name)
+    if value is not None and filter_name:
+        value = FILTERS[filter_name](str(value))
+    return value
+
+
 def render_template(template, values):
     """Fill a JSON body template. Returns the parsed body; raises ValueError if it is not JSON.
 
     Inside quotes ("{{x}}", "Hi {{name}}") the value is text. A bare {{x}} becomes a number
     when the value is all digits without a leading zero, so a receiver that wants
     PolicyNumber as a number gets one; otherwise it is text, or null when there is no value.
+    {{x|international}} writes a local cell number the way Xealth wants it (27...).
     """
     out, i, in_string = [], 0, False
     while i < len(template):
@@ -78,7 +101,7 @@ def render_template(template, values):
             if end < 0:
                 out.append(template[i:])
                 break
-            value = values.get(template[i + 2:end].strip())
+            value = _placeholder(template[i + 2:end], values)
             text = "" if value is None else str(value)
             if in_string:
                 out.append(json.dumps(text, ensure_ascii=False)[1:-1])
