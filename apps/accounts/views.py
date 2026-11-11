@@ -225,28 +225,82 @@ def users(request):
     return render(request, "accounts/users.html", {"people": people, "workspaces": workspaces})
 
 
+def _welcome(request, user, memberships, done):
+    try:
+        sent = emails.send_welcome(user, request.user, memberships)
+    except GraphError as exc:
+        sent = False
+        messages.warning(request, f"{user.display_name} {done} but the welcome email did not go: {exc.friendly}")
+    if sent:
+        messages.success(request, f"{user.display_name} {done}. We have emailed them how to sign in.")
+    elif not messages.get_messages(request):
+        messages.success(request, f"{user.display_name} {done}. Email is not set up, so tell them to sign in with their email address.")
+
+
+def _hidden_login(request, email):
+    """An existing login with no access to any number this administrator manages.
+
+    Such a person is not on the Users page, so neither Add nor Edit could reach
+    them; the Add form gives them access instead of refusing the address.
+    """
+    if not email:
+        return None
+    person = User.objects.filter(email__iexact=email.strip()).first()
+    if person is None:
+        return None
+    if person.workspace_memberships.filter(workspace__in=_manageable_workspaces(request)).exists():
+        return None
+    return person
+
+
+def _give_access(request, person, rows):
+    """Add access for a hidden login. Only someone with no access anywhere is renamed or switched back on."""
+    if not any(r["has_access"] for r in rows):
+        messages.error(request, f"{person.email} already has a login. Tick a number to give them access to it.")
+        return None
+    unattached = not person.workspace_memberships.exists()
+    if not person.is_active and not unattached:
+        messages.error(request, f"{person.email} has a login that is switched off. Ask whoever manages their other number.")
+        return None
+    with transaction.atomic():
+        if unattached:
+            for field in ("first_name", "last_name", "phone"):
+                value = (request.POST.get(field) or "").strip()
+                if value:
+                    setattr(person, field, value)
+            person.is_active = True
+            person.save(update_fields=["first_name", "last_name", "phone", "is_active"])
+        _apply_access(person, rows, request)
+    memberships = list(
+        person.workspace_memberships.select_related("workspace")
+        .filter(workspace__in=[r["workspace"] for r in rows])
+    )
+    audit("user.access_added", request=request, target=person, email=person.email,
+          access=[f"{m.workspace.name}:{m.role}" for m in memberships])
+    _welcome(request, person, memberships, "now has access")
+    return redirect("accounts:users")
+
+
 @login_required
 def user_create(request):
     _require_user_admin(request)
     form = UserForm(request.POST or None)
     rows = _access_rows(request)
-    if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            user = form.save()
-            _apply_access(user, rows, request)
-        memberships = list(user.workspace_memberships.select_related("workspace"))
-        audit("user.created", request=request, target=user, email=user.email,
-              access=[f"{m.workspace.name}:{m.role}" for m in memberships])
-        try:
-            sent = emails.send_welcome(user, request.user, memberships)
-        except GraphError as exc:
-            sent = False
-            messages.warning(request, f"{user.display_name} was created but the welcome email did not go: {exc.friendly}")
-        if sent:
-            messages.success(request, f"{user.display_name} has a login. We have emailed them how to sign in.")
-        elif not messages.get_messages(request):
-            messages.success(request, f"{user.display_name} has a login. Email is not set up, so tell them to sign in with their email address.")
-        return redirect("accounts:users")
+    if request.method == "POST":
+        person = _hidden_login(request, request.POST.get("email"))
+        if person is not None:
+            response = _give_access(request, person, rows)
+            if response is not None:
+                return response
+        elif form.is_valid():
+            with transaction.atomic():
+                user = form.save()
+                _apply_access(user, rows, request)
+            memberships = list(user.workspace_memberships.select_related("workspace"))
+            audit("user.created", request=request, target=user, email=user.email,
+                  access=[f"{m.workspace.name}:{m.role}" for m in memberships])
+            _welcome(request, user, memberships, "has a login")
+            return redirect("accounts:users")
     return render(
         request,
         "accounts/user_form.html",

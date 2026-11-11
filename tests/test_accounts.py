@@ -174,6 +174,36 @@ class UserAdminTests(TestCase):
         response, _ = self._create(email="sam@cinagi.co.za")
         self.assertContains(response, "already has a login")
 
+    def test_a_login_with_no_access_anywhere_is_given_access_instead_of_refused(self):
+        stray = User.objects.create_user("thandi@cinagi.co.za", "thandi@cinagi.co.za", is_active=False)
+        response, welcome = self._create(phone="0821234567")
+        self.assertRedirects(response, reverse("accounts:users"))
+        stray.refresh_from_db()
+        self.assertEqual((stray.first_name, stray.phone, stray.is_active), ("Thandi", "0821234567", True))
+        membership = stray.workspace_memberships.get()
+        self.assertEqual((membership.workspace, membership.role), (self.workspace, "supervisor"))
+        self.assertEqual(User.objects.filter(email="thandi@cinagi.co.za").count(), 1)
+        welcome.assert_called_once()
+
+    def test_someone_from_another_number_gets_access_but_keeps_their_details(self):
+        other_admin = User.objects.create_user("lee@cinagi.co.za", "lee@cinagi.co.za", first_name="Lee")
+        WorkspaceMembership.objects.create(user=other_admin, workspace=self.other, role="admin")
+        response, _ = self._create(email="LEE@cinagi.co.za", first_name="Someone")
+        self.assertRedirects(response, reverse("accounts:users"))
+        other_admin.refresh_from_db()
+        self.assertEqual(other_admin.first_name, "Lee")
+        self.assertEqual(
+            set(other_admin.workspace_memberships.values_list("workspace", "role")),
+            {(self.other.pk, "admin"), (self.workspace.pk, "supervisor")},
+        )
+
+    def test_a_hidden_login_needs_a_number_ticked(self):
+        stray = User.objects.create_user("thandi@cinagi.co.za", "thandi@cinagi.co.za")
+        response, welcome = self._create(**{f"ws_{self.workspace.pk}_access": ""})
+        self.assertContains(response, "Tick a number")
+        self.assertFalse(stray.workspace_memberships.exists())
+        welcome.assert_not_called()
+
     def test_an_owner_only_hands_out_access_to_numbers_they_administer(self):
         response = self.client.get(reverse("accounts:user_create"))
         self.assertContains(response, "Cinagi Broker Support")

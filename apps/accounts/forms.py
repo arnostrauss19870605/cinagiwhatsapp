@@ -70,7 +70,9 @@ class UserForm(forms.ModelForm):
             raise forms.ValidationError(f"Only {domains} addresses can be given a login.")
         clash = User.objects.filter(email__iexact=email).exclude(pk=self.instance.pk)
         if clash.exists():
-            raise forms.ValidationError("Someone already has a login with that email address.")
+            raise forms.ValidationError(
+                "Someone already has a login with that email address. Use Edit on their row in Users to change their access."
+            )
         return email
 
     def save(self, commit=True):
